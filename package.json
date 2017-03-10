@@ -1,0 +1,21 @@
+{
+  "name": "scifiweb",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node node_modules/babel-cli/bin/babel-node.js src/index.js"
+  },
+  "author": "parker",
+  "license": "ISC",
+  "devDependencies": {
+    "babel-cli": "^6.23.0",
+    "babel-core": "^6.23.1",
+    "babel-preset-latest": "^6.22.0",
+    "lodash": "^4.17.4"
+  },
+  "dependencies": {
+    "express": "^4.15.2"
+  }
+}
