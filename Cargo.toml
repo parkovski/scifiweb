@@ -1,0 +1,6 @@
+[package]
+name = "scifiweb"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
