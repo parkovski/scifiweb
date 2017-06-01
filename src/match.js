@@ -36,9 +36,13 @@ export default function matchRouter(pool) {
     try {
       players = JSON.parse(req.query.players);
       winner = parseInt(req.query.winner);
-      if (!validateNewMatchData(players) || isNaN(winner)) {
+      if (!validateNewMatchData(players)) {
         res.writeHead(400);
         res.end('Invalid player data');
+        return;
+      } else if (isNaN(winner) || winner < 0) {
+        res.writeHead(400);
+        res.end('Invalid winner ID');
         return;
       }
     } catch (e) {
