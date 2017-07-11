@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 use either::Either;
 
-use super::event::Event;
+use super::Event;
 
 mod redemption;
 pub use self::redemption::{ RedemptionList, Redemption };
@@ -34,7 +34,7 @@ impl<'a> Collectable<'a> {
     });
   }
 
-  pub fn add_event_redemption(&'a mut self, owned_kind: *const Event<'a>, redeemable_amount: i32) {
+  pub fn add_event_redemption(&'a mut self, owned_kind: *const Event, redeemable_amount: i32) {
     let redeemable_kind = self as *const _;
     self.redemptions.add(Redemption {
       owned_kind: Either::Right(owned_kind),
@@ -68,12 +68,3 @@ impl<'a> PartialEq for Collectable<'a> {
 }
 
 impl<'a> Eq for Collectable<'a> { }
-
-pub struct CollectableInstance<'a> {
-  pub collectable: &'a Collectable<'a>,
-  pub amount: i32,
-}
-
-pub struct CollectableInstanceList<'a> {
-  pub collectables: Vec<&'a CollectableInstance<'a>>,
-}

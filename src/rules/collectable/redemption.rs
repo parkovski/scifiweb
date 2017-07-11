@@ -7,7 +7,7 @@ use super::Collectable;
 use super::super::event::Event;
 
 pub struct Redemption<'a> {
-  pub owned_kind: Either<*const Collectable<'a>, *const Event<'a>>,
+  pub owned_kind: Either<*const Collectable<'a>, *const Event>,
   pub owned_amount: i32,
   pub redeemable_kind: *const Collectable<'a>,
   pub redeemable_amount: i32,

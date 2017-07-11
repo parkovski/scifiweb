@@ -5,7 +5,7 @@ use std::path::Path;
 use std::fs::File;
 use std::marker::PhantomData;
 use std::error::Error;
-use serde::de::{self, Deserializer, Visitor, MapAccess };
+use serde::de::{self, Deserializer, Visitor, MapAccess};
 use serde_json;
 
 #[derive(Deserialize, Debug)]
@@ -49,7 +49,7 @@ impl Default for Collectable {
 pub enum EventTarget {
   Global,
   Profile,
-  Group(Option<String>),
+  GroupType(Option<String>),
 }
 
 #[derive(Deserialize, Debug)]
@@ -69,7 +69,7 @@ fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Err
     type Value = EventTarget;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-      formatter.write_str("\"global\", \"profile\", \"group\" or {\"group\":\"group_name\"}")
+      formatter.write_str("\"global\", \"profile\", \"group\" or {\"groupType\":\"groupName\"}")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<EventTarget, E>
@@ -78,7 +78,7 @@ fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Err
       Ok(match value {
         "global" => EventTarget::Global,
         "profile" => EventTarget::Profile,
-        "group" => EventTarget::Group(None),
+        "group" => EventTarget::GroupType(None),
         _ => return Err(de::Error::invalid_value(de::Unexpected::Str(value), &"global, group, or profile")),
       })
     }
@@ -87,20 +87,20 @@ fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Err
       where M: MapAccess<'de>
     {
       let result = match visitor.next_key::<String>() {
-        Ok(Some(ref key)) if key == "group" => {
+        Ok(Some(ref key)) if key == "groupType" => {
           if let Ok(value) = visitor.next_value::<String>() {
-            Ok(EventTarget::Group(Some(value)))
+            Ok(EventTarget::GroupType(Some(value)))
           } else {
             return Err(de::Error::invalid_type(de::Unexpected::Other("non-string"), &"string"))
           }
         }
-        _ => return Err(de::Error::invalid_value(de::Unexpected::Other("anything that's not the string \"group\""), &"group")),
+        _ => return Err(de::Error::invalid_value(de::Unexpected::Other("anything that's not the string \"groupType\""), &"group")),
       };
 
       if let Ok(None) = visitor.next_key::<String>() {
         result
       } else {
-        Err(de::Error::invalid_length(visitor.size_hint().unwrap_or(2), &"one key named \"group\""))
+        Err(de::Error::invalid_length(visitor.size_hint().unwrap_or(2), &"one key named \"groupType\""))
       }
     }
   }
