@@ -1,8 +1,7 @@
 use std::rc::Rc;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
 use route_recognizer::Router as Recognizer;
-use route_recognizer::Match;
 pub use route_recognizer::Params;
 use futures::{future, Future};
 
@@ -126,12 +125,18 @@ impl<'rt, 'fb, Rq, Rs, E, HFut, FFut, EH> FilterBuilder<'rt, 'fb, Rq, Rs, E, HFu
     }
   }
 
-  pub fn subdir<H>(&'fb mut self, subpath: &str, handler: H) -> FilterBuilder<'rt, 'fb, Rq, Rs, E, HFut, FFut, EH>
+  pub fn subfilter<H>(&'fb mut self, subpath: &str, handler: H) -> FilterBuilder<'rt, 'fb, Rq, Rs, E, HFut, FFut, EH>
     where H: FilterHandler<Rq, Response=Rs, Future=FFut> + 'rt
   {
     let path = self.fix_path(subpath);
     let router = self.router.take().unwrap();
-    router.subdir(Some(self), path, handler)
+    router.subfilter(Some(self), path, handler)
+  }
+
+  pub fn and_then<H>(&'fb mut self, handler: H) -> FilterBuilder<'rt, 'fb, Rq, Rs, E, HFut, FFut, EH>
+    where H: FilterHandler<Rq, Response=Rs, Future=FFut> + 'rt
+  {
+    self.subfilter("", handler)
   }
 
   pub fn up(self) -> &'fb mut FilterBuilder<'rt, 'fb, Rq, Rs, E, HFut, FFut, EH> {
@@ -277,7 +282,7 @@ impl<'a, Rq, Rs, E, HFut, FFut, EH> Router<'a, Rq, Rs, E, HFut, FFut, EH>
     }
   }
 
-  pub(in self) fn subdir<'b, H>(
+  pub(in self) fn subfilter<'b, H>(
     &'b mut self,
     parent_builder: Option<&'b mut FilterBuilder<'a, 'b, Rq, Rs, E, HFut, FFut, EH>>,
     path: String,
@@ -313,7 +318,7 @@ impl<'a, Rq, Rs, E, HFut, FFut, EH> Router<'a, Rq, Rs, E, HFut, FFut, EH>
   pub fn filter<'b, H>(&'b mut self, path: &str, handler: H) -> FilterBuilder<'a, 'b, Rq, Rs, E, HFut, FFut, EH>
     where H: FilterHandler<Rq, Response=Rs, Future=FFut> + 'a
   {
-    self.subdir(None, path.to_string(), handler)
+    self.subfilter(None, path.to_string(), handler)
   }
 
   pub fn add<H>(&mut self, path: &str, handler: H) -> &mut Self
@@ -446,8 +451,8 @@ mod test {
 
       router
         .filter("/test", Filter(true))
-          .subdir(":hi", Filter(true))
-            .subdir("", Filter(true))
+          .subfilter(":hi", Filter(true))
+            .and_then(Filter(true))
               .add("/foo", AppendHandler("/test/:hi/foo"))
         .done()
         .add("/:param/hi", AppendHandler("/:param/hi"))
