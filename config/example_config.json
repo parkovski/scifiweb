@@ -1,0 +1,4 @@
+{
+  "httpServerAddr": "127.0.0.1:8095",
+  "wsServerAddr": "127.0.0.1:8096"
+}

@@ -8,7 +8,7 @@ use std::iter::FromIterator;
 use super::{group, collectable, event, RuleGraph};
 
 pub mod json;
-pub use self::json::{read_json_config, JsonConfig, JsonError};
+pub use self::json::{read_json_rules, JsonRules};
 
 #[derive(Debug)]
 pub struct JsonConvertError {
@@ -54,7 +54,7 @@ impl Error for JsonConvertError {
 }
 
 pub struct JsonToGraphConverter<'a> {
-  json_config: json::JsonConfig,
+  json_config: json::JsonRules,
   group_type_map: Option<HashMap<String, group::GroupType>>,
   event_map: Option<HashMap<String, event::Event>>,
   collectable_list: Option<Vec<collectable::Collectable<'a>>>,
@@ -68,7 +68,7 @@ pub struct JsonToGraphConverter<'a> {
 }
 
 impl<'a> JsonToGraphConverter<'a> {
-  pub fn new(json_config: json::JsonConfig) -> Self {
+  pub fn new(json_config: json::JsonRules) -> Self {
     JsonToGraphConverter {
       json_config,
       group_type_map: Some(HashMap::new()),

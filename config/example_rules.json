@@ -48,7 +48,7 @@
     },
     "groupEvent": {
       "target": {
-        "group": "clan"
+        "groupType": "clan"
       },
       "duration": 60,
       "action": "None"

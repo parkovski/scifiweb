@@ -1,10 +1,6 @@
 pub mod mailbox;
 pub use self::mailbox::*;
 
-pub trait Accessor<'a>
-  : MailboxAccessor<'a> + MessageThreadAccessor<'a> + MessageAccessor<'a>
-{}
+pub trait Accessor<'a>: MessagingAccessor<'a> {}
 
-impl<'a, T> Accessor<'a> for T where T
-  : MailboxAccessor<'a> + MessageThreadAccessor<'a> + MessageAccessor<'a>
-{}
+impl<'a, A> Accessor<'a> for A where A: MessagingAccessor<'a> {}

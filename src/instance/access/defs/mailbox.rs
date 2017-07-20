@@ -9,6 +9,10 @@ use instance::mailbox::{
 
 pub type MailboxFuture<'a, Item> = Box<Future<Item=Item, Error=MailboxError> + 'a>;
 
+pub trait MessagingAccessor<'a>: MailboxAccessor<'a> + MessageThreadAccessor<'a> + MessageAccessor<'a> {}
+impl<'a, A> MessagingAccessor<'a> for A
+  where A: MailboxAccessor<'a> + MessageThreadAccessor<'a> + MessageAccessor<'a> {}
+
 pub trait MailboxAccessor<'a> {
   fn create_mailbox(&mut self, owner: Target<'a>, name: &str, message_limit: MessageLimit, thread_limit: u32)
     -> MailboxFuture<'a, Mailbox<'a>>;

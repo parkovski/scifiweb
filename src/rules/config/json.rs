@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::io;
 use std::path::Path;
 use std::fs::File;
 use std::marker::PhantomData;
-use std::error::Error;
+
 use serde::de::{self, Deserializer, Visitor, MapAccess};
 use serde_json;
+
+use util::JsonError;
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
@@ -110,7 +111,7 @@ fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Err
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct JsonConfig {
+pub struct JsonRules {
   #[serde(default)]
   pub group_types: Vec<String>,
   #[serde(default)]
@@ -119,47 +120,7 @@ pub struct JsonConfig {
   pub events: HashMap<String, Event>,
 }
 
-#[derive(Debug)]
-pub enum JsonError {
-  Serde(serde_json::Error),
-  Io(io::Error),
-  Deserialize(String),
-}
 
-impl fmt::Display for JsonError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-    write!(f, "{}", self.description())
-  }
-}
-
-impl Error for JsonError {
-  fn description(&self) -> &str {
-    match self {
-      &JsonError::Serde(ref e) => e.description(),
-      &JsonError::Io(ref e) => e.description(),
-      &JsonError::Deserialize(ref s) => s.as_str(),
-    }
-  }
-}
-
-impl de::Error for JsonError {
-  fn custom<T>(msg: T) -> Self where T : fmt::Display {
-    JsonError::Deserialize(format!("{}", msg))
-  }
-}
-
-impl From<serde_json::Error> for JsonError {
-  fn from(error: serde_json::Error) -> Self {
-    JsonError::Serde(error)
-  }
-}
-
-impl From<io::Error> for JsonError {
-  fn from(error: io::Error) -> Self {
-    JsonError::Io(error)
-  }
-}
-
-pub fn read_json_config(filename: &Path) -> Result<JsonConfig, JsonError> {
+pub fn read_json_rules(filename: &Path) -> Result<JsonRules, JsonError> {
   Ok(serde_json::from_reader(File::open(filename)?)?)
 }

@@ -1,59 +1,22 @@
-use std::net::Ipv4Addr;
-
+use std::sync::Arc;
+use hyper::{self, Request, Response};
+use hyper::server::Http;
 use futures::Future;
-use futures::future::{self, FutureResult};
-use hyper;
-use hyper::header::{ContentLength, ContentType};
-use hyper::server::{Http, Service, Request, Response};
-
-use super::router::{Router, Handler, Params, HyperRouter, ErrorHandler};
 use instance::access::Accessor;
+use super::router::{self, Rejection};
+use super::router::hyper::HyperRouter;
 
-struct Hello;
+mod error;
+use self::error::ErrorHandler;
+mod routes;
+use self::routes::setup_routes;
 
-impl Service for Hello {
-  type Request = Request;
-  type Response = Response;
-  type Error = hyper::Error;
-  type Future = FutureResult<Response, hyper::Error>;
+pub type RouteFuture<'a> = Box<Future<Item=Response, Error=hyper::Error> + 'a>;
+pub type FilterFuture<'a> = Box<Future<Item=(), Error=Rejection<Response, hyper::Error>> + 'a>;
+pub type Router<'a> = router::Router<'a, Request, RouteFuture<'a>, FilterFuture<'a>, ErrorHandler>;
 
-  fn call(&self, _req: Request) -> Self::Future {
-    future::ok(
-      Response::new()
-        .with_header(ContentLength("Hello".len() as u64))
-        .with_header(ContentType::plaintext())
-        .with_body("Hello")
-    )
-  }
-}
-
-impl ErrorHandler<FutureResult<Response, hyper::Error>> for Hello {
-  fn on_error(&mut self, _error: hyper::Error) -> FutureResult<Response, hyper::Error> {
-    future::ok(Response::new())
-  }
-
-  fn on_not_found(&mut self, _path: &str) -> FutureResult<Response, hyper::Error> {
-    future::ok(Response::new())
-  }
-}
-
-fn fut(text: &str) -> FutureResult<Response, hyper::Error> {
-  future::ok(
-    Response::new()
-      .with_header(ContentLength(text.len() as u64))
-      .with_header(ContentType::plaintext())
-      .with_body(text.to_string())
-  )
-}
-
-fn create_router<'a>() -> HyperRouter<'a, FutureResult<Response, hyper::Error>, FutureResult<(), Response>, Hello> {
-  let mut router = Router::new(Hello);
-  router.add("/", |_, _: &Params| fut("hello world"));
-  HyperRouter::new(router)
-}
-
-pub fn start<'a, A: Accessor<'a> + 'a>(port: u16, _accessor: A) -> hyper::Result<()> {
-  let addr = (Ipv4Addr::new(127, 0, 0, 1), port).into();
-  let server = Http::new().bind(&addr, || Ok(Hello))?;
+pub fn start<'a, A: Accessor<'a> + 'a>(addr: &str, _accessor: A) -> hyper::Result<()> {
+  let router = Arc::new(HyperRouter::new(setup_routes()));
+  let server = Http::new().bind(&addr.parse().unwrap(), move || Ok(router.clone()))?;
   server.run()
 }
