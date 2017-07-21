@@ -82,38 +82,14 @@ where FFut: Future<Item=(), Error=Rejection<Response, HyperError>> + 'a,
   }
 }
 
-pub struct CommonMethods<FFut, F>
-where FFut: Future<Item=(), Error=Rejection<Response, HyperError>>,
-      F: Fn(Result<(), Rejection<Response, HyperError>>) -> FFut + Send + Sync,
-{
-  make_future: Arc<F>,
+pub struct CommonMethods {
   get: FilterHandle,
   post: FilterHandle,
   put: FilterHandle,
   delete: FilterHandle,
 }
 
-impl<'a, FFut, F> CommonMethods<FFut, F>
-where FFut: Future<Item=(), Error=Rejection<Response, HyperError>>,
-      F: Fn(Result<(), Rejection<Response, HyperError>>) -> FFut + Send + Sync + 'a,
-{
-  pub fn new<RFut, EH>(
-    builder: &mut RouterBuilder<'a, Request, RFut, FFut, EH>,
-    make_future: F,
-  ) -> Self
-  where RFut: Future<Item=Response, Error=HyperError> + 'a,
-        EH: ErrorHandler<'a, HyperError, Future=RFut> + 'a,
-  {
-    let make_future = Arc::new(make_future);
-    CommonMethods {
-      get: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Get)),
-      post: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Post)),
-      put: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Put)),
-      delete: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Delete)),
-      make_future,
-    }
-  }
-
+impl CommonMethods {
   pub fn get(&self) -> FilterHandle {
     self.get
   }
@@ -128,6 +104,58 @@ where FFut: Future<Item=(), Error=Rejection<Response, HyperError>>,
 
   pub fn delete(&self) -> FilterHandle {
     self.delete
+  }
+}
+
+pub struct SharedMethodFilters<FFut, F>
+where FFut: Future<Item=(), Error=Rejection<Response, HyperError>>,
+      F: Fn(Result<(), Rejection<Response, HyperError>>) -> FFut + Send + Sync,
+{
+  common_methods: CommonMethods,
+  make_future: Arc<F>,
+}
+
+impl<'a, FFut, F> SharedMethodFilters<FFut, F>
+where FFut: Future<Item=(), Error=Rejection<Response, HyperError>>,
+      F: Fn(Result<(), Rejection<Response, HyperError>>) -> FFut + Send + Sync + 'a,
+{
+  pub fn new<RFut, EH>(
+    builder: &mut RouterBuilder<'a, Request, RFut, FFut, EH>,
+    make_future: F,
+  ) -> Self
+  where RFut: Future<Item=Response, Error=HyperError> + 'a,
+        EH: ErrorHandler<'a, HyperError, Future=RFut> + 'a,
+  {
+    let make_future = Arc::new(make_future);
+    SharedMethodFilters {
+      common_methods: CommonMethods {
+        get: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Get)),
+        post: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Post)),
+        put: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Put)),
+        delete: builder.new_filter(MethodFilter::new(make_future.clone(), Method::Delete)),
+      },
+      make_future,
+    }
+  }
+
+  pub fn common_methods(&self) -> &CommonMethods {
+    &self.common_methods
+  }
+
+  pub fn get(&self) -> FilterHandle {
+    self.common_methods.get()
+  }
+
+  pub fn post(&self) -> FilterHandle {
+    self.common_methods.post()
+  }
+
+  pub fn put(&self) -> FilterHandle {
+    self.common_methods.put()
+  }
+
+  pub fn delete(&self) -> FilterHandle {
+    self.common_methods.delete()
   }
 
   pub fn make_custom<RFut, EH>(

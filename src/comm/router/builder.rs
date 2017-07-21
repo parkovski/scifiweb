@@ -25,6 +25,37 @@ impl FilterHandle {
   }
 }
 
+pub trait IntoFilterHandle<'a, Rq, RFut, FFut, EH>
+where Rq: 'a,
+      RFut: Future + 'a,
+      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
+      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+{
+  fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle;
+}
+
+impl<'a, Rq, RFut, FFut, EH, F> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for F
+where Rq: 'a,
+      RFut: Future + 'a,
+      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
+      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+      F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a,
+{
+  fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
+    builder.new_filter(self)
+  }
+}
+
+impl<'a, Rq, RFut, FFut, EH> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for FilterHandle
+where Rq: 'a,
+      RFut: Future + 'a,
+      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
+      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+{
+  fn into_filter_handle(self, _builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
+    self
+  }
+}
 /*
 pub trait Builder<'a, Rq, RFut, FFut, EH>: Sized
 where Rq: 'a,
@@ -139,21 +170,9 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
   }
 
   pub fn with_filter<F>(mut self, handler: F) -> Self
-    where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a
+    where F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>
   {
-    let filter_handle = self.new_filter(handler);
-    match self.last_route_index {
-      Some(route) => {
-        self.add_filter_to_route(route, filter_handle.id());
-      }
-      None => {
-        add_index_unique(&mut self.global_filters, filter_handle.id());
-      }
-    }
-    self
-  }
-
-  pub fn with_shared_filter(mut self, filter_handle: FilterHandle) -> Self {
+    let filter_handle = handler.into_filter_handle(&mut self);
     match self.last_route_index {
       Some(route) => self.add_filter_to_route(route, filter_handle.id()),
       None => add_index_unique(&mut self.global_filters, filter_handle.id()),
@@ -250,28 +269,17 @@ DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   }
 
   pub fn with_filter<F>(mut self, handler: F) -> Self
-  where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a
+  where F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>
   {
     match (self.last_route_index, self.router_builder.as_mut()) {
       (Some(route), Some(router_builder)) => {
-        let filter_handle = router_builder.new_filter(handler);
+        let filter_handle = handler.into_filter_handle(router_builder);
         router_builder.add_filter_to_route(route, filter_handle.id());
       }
       (None, Some(router_builder)) => {
-        let filter_handle = router_builder.new_filter(handler);
+        let filter_handle = handler.into_filter_handle(router_builder);
         add_index_unique(&mut self.filter_indexes, filter_handle.id());
       }
-      _ => unreachable!(),
-    }
-    self
-  }
-
-  pub fn with_shared_filter(mut self, filter_handle: FilterHandle) -> Self {
-    match (self.last_route_index, self.router_builder.as_mut()) {
-      (Some(route), Some(router_builder))
-        => router_builder.add_filter_to_route(route, filter_handle.id()),
-      (None, _)
-        => add_index_unique(&mut self.filter_indexes, filter_handle.id()),
       _ => unreachable!(),
     }
     self
