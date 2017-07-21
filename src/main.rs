@@ -35,11 +35,11 @@ use instance::access::mem::MemoryAccessor;
 fn main() {
   let _ = util::log::init();
  
-  let config = Config::read(Path::new("./config/example_config.json")).expect("Couldn't read config!");
+  let config = Config::read(Path::new("./config/example_config.json")).expect("Couldn't read config");
 
-  let json_rules = read_json_rules(Path::new("./config/example_rules.json")).expect("Couldn't read json rules!");
+  let json_rules = read_json_rules(Path::new("./config/example_rules.json")).expect("Couldn't read json rules");
   let converter = JsonToGraphConverter::new(json_rules);
-  let graph = converter.convert().expect("Couldn't convert json rules!");
+  let graph = converter.convert().expect("Couldn't convert json rules");
 
   let accessor = MemoryAccessor::new();
 
