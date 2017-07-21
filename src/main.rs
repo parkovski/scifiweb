@@ -33,8 +33,8 @@ use rules::config::{JsonToGraphConverter, read_json_rules};
 use instance::access::mem::MemoryAccessor;
 
 fn main() {
-  util::log::init();
-  
+  let _ = util::log::init();
+ 
   let config = Config::read(Path::new("./config/example_config.json")).expect("Couldn't read config!");
 
   let json_rules = read_json_rules(Path::new("./config/example_rules.json")).expect("Couldn't read json rules!");
@@ -43,5 +43,5 @@ fn main() {
 
   let accessor = MemoryAccessor::new();
 
-  comm::http::start(config.http_server_addr.as_str(), accessor).unwrap_or_else(|e| println!("HTTP Error: {:?}", e));
+  comm::http::start(config.http_server_addr.as_str(), accessor).unwrap_or_else(|e| error!("HTTP Error: {}", e));
 }

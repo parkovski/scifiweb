@@ -1,7 +1,7 @@
 pub mod config;
 mod json_error;
 pub use self::json_error::JsonError;
-//pub mod log;
+pub mod log;
 pub mod sync;
 
 /// With futures we can end up with big expression
