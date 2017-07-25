@@ -1,16 +1,16 @@
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GroupType {
-  name: String,
+  name: Box<str>,
 }
 
 impl GroupType {
   pub fn new(name: String) -> Self {
     GroupType {
-      name,
+      name: name.into_boxed_str(),
     }
   }
 
   pub fn name(&self) -> &str {
-    self.name.as_str()
+    &self.name
   }
 }

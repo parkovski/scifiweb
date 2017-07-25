@@ -7,5 +7,5 @@ use super::Target;
 pub struct Event<'a> {
   rules: &'a rules::Event,
   start_time: Instant,
-  target: Target<'a>,
+  target: Target,
 }

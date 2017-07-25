@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use serde::de::{self, Deserializer, Visitor, MapAccess};
 use serde_json;
 
-use util::JsonError;
+use util::error::JsonError;
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]

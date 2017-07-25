@@ -3,7 +3,7 @@ use std::fs::File;
 
 use serde_json;
 
-use util::JsonError;
+use util::error::JsonError;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]

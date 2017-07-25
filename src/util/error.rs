@@ -1,6 +1,5 @@
 use std::{io, fmt};
 use std::error::Error;
-
 use serde::de;
 use serde_json;
 
@@ -42,5 +41,26 @@ impl From<serde_json::Error> for JsonError {
 impl From<io::Error> for JsonError {
   fn from(error: io::Error) -> Self {
     JsonError::Io(error)
+  }
+}
+
+#[derive(Debug)]
+pub struct FormatError(String);
+
+impl FormatError {
+  pub fn new(expected: &str) -> Self {
+    FormatError(format!("Expected {}", expected))
+  }
+}
+
+impl fmt::Display for FormatError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str(&self.0)
+  }
+}
+
+impl Error for FormatError {
+  fn description(&self) -> &str {
+    &self.0
   }
 }

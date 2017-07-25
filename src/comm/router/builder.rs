@@ -29,7 +29,8 @@ pub trait IntoFilterHandle<'a, Rq, RFut, FFut, EH>
 where Rq: 'a,
       RFut: Future + 'a,
       FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+      EH: ErrorHandler<'a, RFut::Error> + 'a,
+      EH::Future: Future<Item=RFut::Item> + 'a,
 {
   fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle;
 }
@@ -38,7 +39,8 @@ impl<'a, Rq, RFut, FFut, EH, F> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for F
 where Rq: 'a,
       RFut: Future + 'a,
       FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+      EH: ErrorHandler<'a, RFut::Error> + 'a,
+      EH::Future: Future<Item=RFut::Item> + 'a,
       F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a,
 {
   fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
@@ -50,7 +52,8 @@ impl<'a, Rq, RFut, FFut, EH> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for Filter
 where Rq: 'a,
       RFut: Future + 'a,
       FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+      EH: ErrorHandler<'a, RFut::Error> + 'a,
+      EH::Future: Future<Item=RFut::Item> + 'a,
 {
   fn into_filter_handle(self, _builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
     self
@@ -99,7 +102,8 @@ where Rq: 'a,
 pub struct RouterBuilder<'a, Rq, RFut, FFut, EH>
   where RFut: Future + 'a,
         FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+        EH: ErrorHandler<'a, RFut::Error> + 'a,
+        EH::Future: Future<Item=RFut::Item> + 'a,
 {
   recognizer: Recognizer<u32>,
   routes: Vec<RouteEntry<'a, Rq, RFut>>,
@@ -125,7 +129,8 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
   where Rq: 'a,
         RFut: Future + 'a,
         FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+        EH: ErrorHandler<'a, RFut::Error> + 'a,
+        EH::Future: Future<Item=RFut::Item> + 'a,
 {
   pub fn new(error_handler: EH) -> Self {
     RouterBuilder {
@@ -213,7 +218,8 @@ pub struct DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   where Rq: 'a,
         RFut: Future + 'a,
         FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
+        EH: ErrorHandler<'a, RFut::Error> + 'a,
+        EH::Future: Future<Item=RFut::Item> + 'a,
         Par: Sized + 'a,
 {
   router_builder: Option<Box<RouterBuilder<'a, Rq, RFut, FFut, EH>>>,
@@ -227,7 +233,8 @@ impl<'a, Rq, RFut, FFut, EH, Par>
 DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   where RFut: Future,
         FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-        EH: ErrorHandler<'a, RFut::Error, Future=RFut>,
+        EH: ErrorHandler<'a, RFut::Error>,
+        EH::Future: Future<Item=RFut::Item>,
 {
   /// Join two paths, converting either zero or
   /// two slashes to one at the join point.
@@ -310,7 +317,8 @@ DirBuilder<
 >
 where RFut: Future,
       FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-      EH: ErrorHandler<'a, RFut::Error, Future=RFut>,
+      EH: ErrorHandler<'a, RFut::Error>,
+      EH::Future: Future<Item=RFut::Item>,
 {
   pub fn up(self) -> DirBuilder<'a, Rq, RFut, FFut, EH, Par> {
     let mut parent = self.parent.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF);
@@ -326,7 +334,8 @@ DirBuilder<
 >
   where RFut: Future,
         FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-        EH: ErrorHandler<'a, RFut::Error, Future=RFut>,
+        EH: ErrorHandler<'a, RFut::Error>,
+        EH::Future: Future<Item=RFut::Item>,
 {
   pub fn up(self) -> RouterBuilder<'a, Rq, RFut, FFut, EH> {
     *self.router_builder.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)

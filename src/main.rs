@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+#![feature(try_trait)]
+
 extern crate core;
 extern crate hyper;
 extern crate hyper_tls;
@@ -12,10 +14,12 @@ extern crate either;
 extern crate futures;
 extern crate ctrlc;
 extern crate route_recognizer;
-//extern crate url;
+extern crate url;
 #[macro_use]
 extern crate log;
 extern crate termcolor;
+extern crate atomic;
+extern crate crossbeam;
 
 mod auth;
 mod comm;
@@ -24,6 +28,7 @@ mod instance;
 //mod leaderboard;
 //mod mm;
 mod rules;
+#[macro_use]
 mod util;
 
 use std::path::Path;

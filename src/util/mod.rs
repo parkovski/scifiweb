@@ -1,8 +1,14 @@
 pub mod config;
-mod json_error;
-pub use self::json_error::JsonError;
+pub mod future;
+#[macro_use]
+pub mod error;
 pub mod log;
+pub mod rwlock;
 pub mod sync;
+
+pub fn id<T>(t: T) -> T {
+  t
+}
 
 /// With futures we can end up with big expression
 /// chains - rather than wrap them in lots of parens,
