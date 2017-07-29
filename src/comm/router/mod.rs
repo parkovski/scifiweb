@@ -1,9 +1,6 @@
 pub mod builder;
 mod handlers;
-pub use self::handlers::{
-  Params, Rejection, ExtMap, get_any, get_any_mut,
-  get_str_param, get_param, ParamError
-};
+pub use self::handlers::{Params, Rejection, ExtMap, GetAny, GetParam, ParamError};
 pub mod hyper;
 mod router;
 pub use self::router::Router;

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 #![feature(try_trait)]
+#![feature(conservative_impl_trait)]
 
 extern crate core;
 extern crate hyper;

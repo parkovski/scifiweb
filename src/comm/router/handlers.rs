@@ -49,27 +49,45 @@ impl Error for ParamError {
   }
 }
 
-pub fn get_any<'a, T: 'static>(map: &'a ExtMap, key: &str) -> Result<&'a T, ParamError> {
-  map.get(key).and_then(|any| any.downcast_ref()).ok_or_else(|| ParamError::not_found("Extension param", key))
+pub trait GetAny<K> {
+  type Error;
+
+  fn get_any<'a, V: 'static>(&'a self, key: K) -> Result<&'a V, Self::Error>;
+  fn get_any_mut<'a, V: 'static>(&'a mut self, key: K) -> Result<&'a mut V, Self::Error>;
 }
 
-pub fn get_any_mut<'a, T: 'static>(map: &'a mut ExtMap, key: &str) -> Result<&'a mut T, ParamError> {
-  map.get_mut(key).and_then(|any| any.downcast_mut()).ok_or_else(|| ParamError::not_found("Extension param", key))
-}
+impl<'s> GetAny<&'s str> for HashMap<String, Box<Any>> {
+  type Error = ParamError;
 
-pub fn get_str_param<'a>(params: &'a Params, key: &str) -> Result<&'a str, ParamError> {
-  if let Some(param) = params.find(key) {
-    Ok(param)
-  } else {
-    Err(ParamError::not_found("route param", key))
+  fn get_any<'a, V: 'static>(&'a self, key: &'s str) -> Result<&'a V, ParamError> {
+    self.get(key).and_then(|any| any.downcast_ref()).ok_or_else(|| ParamError::not_found("Extension param", key))
+  }
+
+  fn get_any_mut<'a, V: 'static>(&'a mut self, key: &'s str) -> Result<&'a mut V, ParamError> {
+    self.get_mut(key).and_then(|any| any.downcast_mut()).ok_or_else(|| ParamError::not_found("Extension param", key))
   }
 }
 
-pub fn get_param<T: FromStr>(params: &Params, key: &str) -> Result<T, ParamError> {
-  if let Some(param) = params.find(key) {
-    param.parse::<T>().map_err(|_| ParamError::invalid_conversion(param))
-  } else {
-    Err(ParamError::not_found("route param", key))
+pub trait GetParam {
+  fn get_str_param<'a>(&'a self, key: &str) -> Result<&'a str, ParamError>;
+  fn get_param<T: FromStr>(&self, key: &str) -> Result<T, ParamError>;
+}
+
+impl GetParam for Params {
+  fn get_str_param<'a>(&'a self, key: &str) -> Result<&'a str, ParamError> {
+    if let Some(param) = self.find(key) {
+      Ok(param)
+    } else {
+      Err(ParamError::not_found("route param", key))
+    }
+  }
+
+  fn get_param<T: FromStr>(&self, key: &str) -> Result<T, ParamError> {
+    if let Some(param) = self.find(key) {
+      param.parse::<T>().map_err(|_| ParamError::invalid_conversion(param))
+    } else {
+      Err(ParamError::not_found("route param", key))
+    }
   }
 }
 

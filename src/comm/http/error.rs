@@ -6,7 +6,6 @@ use futures::{future, Future};
 use comm::router::ParamError;
 use comm::router::builder;
 use instance::mailbox::MailboxError;
-use super::RouteFuture;
 
 #[derive(Debug)]
 pub enum Error {

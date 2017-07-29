@@ -11,9 +11,9 @@ use self::error::ErrorHandler;
 mod routes;
 use self::routes::setup_routes;
 
-pub type RouteFuture<'a> = SFFuture<'a, Response, error::Error>;
-pub type FilterFuture<'a> = SFFuture<'a, (), Rejection<Response, error::Error>>;
-pub type Router<'a> = router::Router<'a, Request, RouteFuture<'a>, FilterFuture<'a>, ErrorHandler>;
+pub type RouteFuture = SFFuture<'static, Response, error::Error>;
+pub type FilterFuture = SFFuture<'static, (), Rejection<Response, error::Error>>;
+pub type Router = router::Router<'static, Request, RouteFuture, FilterFuture, ErrorHandler>;
 
 pub fn start<A: Accessor<'static> + 'static>(addr: &str, accessor: A) -> hyper::Result<()> {
   let router = Arc::new(HyperRouter::new(setup_routes(accessor)));

@@ -3,11 +3,11 @@ use futures::{Future, Poll, IntoFuture};
 use super::IntoBox;
 
 pub struct SFFuture<'a, Item, Error> {
-  inner: Box<Future<Item=Item, Error=Error> + 'a>,
+  inner: Box<Future<Item=Item, Error=Error> + Send + 'a>,
 }
 
 impl<'a, Item, Error> SFFuture<'a, Item, Error> {
-  pub fn new<F: IntoFuture<Item=Item, Error=Error> + 'a>(f: F) -> Self {
+  pub fn new<F: IntoFuture<Item=Item, Error=Error> + 'a>(f: F) -> Self where F::Future: Send {
     SFFuture { inner: f.into_future().into_box() }
   }
 }
@@ -21,7 +21,7 @@ impl<'a, Item, Error> Future for SFFuture<'a, Item, Error> {
   }
 }
 
-impl<'a, Item: 'a, Error: 'a> Try for SFFuture<'a, Item, Error> {
+impl<'a, Item: Send + 'a, Error: Send + 'a> Try for SFFuture<'a, Item, Error> {
   type Ok = Item;
   type Error = Error;
 

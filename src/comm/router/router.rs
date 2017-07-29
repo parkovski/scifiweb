@@ -53,8 +53,6 @@ pub struct Router<'a, Rq, RFut, FFut, EH>
   error_handler: Arc<EH>,
 }
 
-const ERROR_PARAM_REF_BUG: &'static str = "Bug: all other references to params should have been dropped";
-
 impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
   where Rq: 'a,
         RFut: Future + 'a,
