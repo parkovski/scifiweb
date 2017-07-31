@@ -45,7 +45,7 @@ impl From<ParamError> for Error {
 
 pub struct ErrorHandler;
 impl<'a> builder::ErrorHandler<'a, Error> for ErrorHandler {
-  type Future = Box<Future<Item=Response, Error=hyper::Error> + 'a>;
+  type Future = Box<Future<Item = Response, Error = hyper::Error> + 'a>;
 
   fn on_error(&self, error: Error) -> Self::Future {
     let message = format!("Server error: {}", error);
@@ -54,7 +54,7 @@ impl<'a> builder::ErrorHandler<'a, Error> for ErrorHandler {
         .with_header(ContentLength(message.len() as u64))
         .with_header(ContentType::plaintext())
         .with_status(StatusCode::InternalServerError)
-        .with_body(message)
+        .with_body(message),
     ))
   }
 
@@ -65,7 +65,7 @@ impl<'a> builder::ErrorHandler<'a, Error> for ErrorHandler {
         .with_header(ContentLength(message.len() as u64))
         .with_header(ContentType::plaintext())
         .with_status(StatusCode::NotFound)
-        .with_body(message)
+        .with_body(message),
     ))
   }
 }

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::iter::FromIterator;
 
-use super::{group, collectable, event, RuleGraph};
+use super::{collectable, event, group, RuleGraph};
 
 pub mod json;
 pub use self::json::{read_json_rules, JsonRules};
@@ -17,9 +17,7 @@ pub struct JsonConvertError {
 
 impl JsonConvertError {
   pub fn new(description: String) -> Self {
-    JsonConvertError {
-      description,
-    }
+    JsonConvertError { description }
   }
 
   pub fn not_found(kind: &'static str, name: &String) -> Self {
@@ -59,11 +57,12 @@ pub struct JsonToGraphConverter<'a> {
   event_map: Option<HashMap<String, event::Event>>,
   collectable_list: Option<Vec<collectable::Collectable<'a>>>,
   collectable_map: HashMap<
-    String, (
+    String,
+    (
       *mut collectable::Collectable<'a>,
       Vec<json::Redemption>,
-      Vec<json::Upgrade>
-    )
+      Vec<json::Upgrade>,
+    ),
   >,
 }
 
@@ -86,7 +85,14 @@ impl<'a> JsonToGraphConverter<'a> {
     self.collectable_map.clear();
     let result = (
       self.group_type_map.take().unwrap(),
-      HashMap::from_iter(self.collectable_list.take().unwrap().into_iter().map(|c| (c.name.clone(), c))),
+      HashMap::from_iter(
+        self
+          .collectable_list
+          .take()
+          .unwrap()
+          .into_iter()
+          .map(|c| (c.name.clone(), c)),
+      ),
       self.event_map.take().unwrap(),
     );
     Ok(RuleGraph::new(result.0, result.1, result.2))
@@ -96,8 +102,12 @@ impl<'a> JsonToGraphConverter<'a> {
     if let Some(ref mut group_type_map) = self.group_type_map {
       for json_group_type in self.json_config.group_types.drain(..) {
         match group_type_map.entry(json_group_type.clone()) {
-          Entry::Occupied(_) => return Err(JsonConvertError::duplicate("group type", &json_group_type)),
-          Entry::Vacant(e) => { e.insert(group::GroupType::new(json_group_type)); }
+          Entry::Occupied(_) => {
+            return Err(JsonConvertError::duplicate("group type", &json_group_type))
+          }
+          Entry::Vacant(e) => {
+            e.insert(group::GroupType::new(json_group_type));
+          }
         }
       }
       Ok(())
@@ -108,7 +118,10 @@ impl<'a> JsonToGraphConverter<'a> {
 
   fn convert_collectables(&mut self) -> Result<(), JsonConvertError> {
     {
-      let collectable_list = self.collectable_list.as_mut().ok_or_else(|| JsonConvertError::already_processed("collectables"))?;
+      let collectable_list = self
+        .collectable_list
+        .as_mut()
+        .ok_or_else(|| JsonConvertError::already_processed("collectables"))?;
       let collectable_map = &mut self.collectable_map;
       for json_collectable in self.json_config.collectables.drain() {
         collectable_list.push(collectable::Collectable::new(json_collectable.0.clone()));
@@ -122,17 +135,14 @@ impl<'a> JsonToGraphConverter<'a> {
           (
             collectable_ptr,
             json_collectable.1.redemptions,
-            json_collectable.1.upgrades
-          )
+            json_collectable.1.upgrades,
+          ),
         );
       }
     }
     for collectable in self.collectable_map.iter() {
-      self.add_redemptions_and_upgrades(
-        (collectable.1).0,
-        &(collectable.1).1,
-        &(collectable.1).2
-      )?;
+      self
+        .add_redemptions_and_upgrades((collectable.1).0, &(collectable.1).1, &(collectable.1).2)?;
     }
     Ok(())
   }
@@ -141,38 +151,35 @@ impl<'a> JsonToGraphConverter<'a> {
     &'b self,
     collectable: *mut collectable::Collectable<'a>,
     redemptions: &'b Vec<json::Redemption>,
-    upgrades: &'b Vec<json::Upgrade>
-  ) -> Result<(), JsonConvertError>
-  {
+    upgrades: &'b Vec<json::Upgrade>,
+  ) -> Result<(), JsonConvertError> {
     let collectable_map = &self.collectable_map;
     let event_map = self.event_map.as_ref().unwrap();
     for r in redemptions.iter() {
       match r {
-        &json::Redemption::Event { amount, cost_event: ref cost_event_name } => {
-          if let Some(cost_event) = event_map.get(cost_event_name) {
-            unsafe {
-              (*collectable).add_event_redemption(
-                cost_event as *const _,
-                amount,
-              )
-            }
-          } else {
-            return Err(JsonConvertError::not_found("event", cost_event_name));
+        &json::Redemption::Event {
+          amount,
+          cost_event: ref cost_event_name,
+        } => if let Some(cost_event) = event_map.get(cost_event_name) {
+          unsafe { (*collectable).add_event_redemption(cost_event as *const _, amount) }
+        } else {
+          return Err(JsonConvertError::not_found("event", cost_event_name));
+        },
+        &json::Redemption::Collectable {
+          amount,
+          cost_collectable: ref cost_collectable_name,
+          cost_amount,
+        } => if let Some(&(cost_collectable, _, _)) = collectable_map.get(cost_collectable_name) {
+          unsafe {
+            (*collectable)
+              .add_collectable_redemption(cost_amount, cost_collectable as *const _, amount);
           }
-        }
-        &json::Redemption::Collectable { amount, cost_collectable: ref cost_collectable_name, cost_amount } => {
-          if let Some(&(cost_collectable, _, _)) = collectable_map.get(cost_collectable_name) {
-            unsafe {
-              (*collectable).add_collectable_redemption(
-                cost_amount,
-                cost_collectable as *const _,
-                amount,
-              );
-            }
-          } else {
-            return Err(JsonConvertError::not_found("collectable", cost_collectable_name));
-          }
-        }
+        } else {
+          return Err(JsonConvertError::not_found(
+            "collectable",
+            cost_collectable_name,
+          ));
+        },
       }
     }
     for u in upgrades.iter() {
@@ -181,7 +188,10 @@ impl<'a> JsonToGraphConverter<'a> {
           (*collectable).add_upgrade(u.cost_amount, cost_collectable as *const _, u.level);
         }
       } else {
-        return Err(JsonConvertError::not_found("collectable", &u.cost_collectable));
+        return Err(JsonConvertError::not_found(
+          "collectable",
+          &u.cost_collectable,
+        ));
       }
     }
     Ok(())
@@ -209,7 +219,10 @@ impl<'a> JsonToGraphConverter<'a> {
     Ok(())
   }
 
-  fn convert_event_target(json_event_target: &json::EventTarget, group_type_map: &HashMap<String, group::GroupType>) -> Result<event::EventTarget, JsonConvertError> {
+  fn convert_event_target(
+    json_event_target: &json::EventTarget,
+    group_type_map: &HashMap<String, group::GroupType>,
+  ) -> Result<event::EventTarget, JsonConvertError> {
     match json_event_target {
       &json::EventTarget::Global => Ok(event::EventTarget::Global),
       &json::EventTarget::Profile => Ok(event::EventTarget::Profile),

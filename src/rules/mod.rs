@@ -18,9 +18,8 @@ impl<'a> RuleGraph<'a> {
   pub fn new(
     group_type_map: HashMap<String, GroupType>,
     collectable_map: HashMap<String, Collectable<'a>>,
-    event_map: HashMap<String, Event>
-  ) -> Self
-  {
+    event_map: HashMap<String, Event>,
+  ) -> Self {
     RuleGraph {
       group_type_map,
       collectable_map,

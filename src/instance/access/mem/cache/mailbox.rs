@@ -1,9 +1,9 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::Entry as HEntry;
 use std::collections::btree_map::Entry as BTEntry;
 
 use instance::Target;
-use instance::mailbox::{Mailbox, MessageThread, Message, MailboxError};
+use instance::mailbox::{Mailbox, MailboxError, Message, MessageThread};
 
 pub struct MailboxCache {
   // Mailbox ID to mailbox
@@ -21,15 +21,23 @@ impl MailboxCache {
   }
 
   pub fn put_mailbox(&mut self, mailbox: Mailbox) -> Result<Mailbox, MailboxError> {
-    trace!("Storing mailbox #{} ({} for {})", mailbox.id(), mailbox.name(), mailbox.owner());
-    let name_map_entry = self.mailbox_owner_map
+    trace!(
+      "Storing mailbox #{} ({} for {})",
+      mailbox.id(),
+      mailbox.name(),
+      mailbox.owner()
+    );
+    let name_map_entry = self
+      .mailbox_owner_map
       .entry(mailbox.owner())
       .or_insert_with(BTreeMap::new)
       .entry(mailbox.name().to_owned());
     let id_map_entry = self.mailboxes.entry(mailbox.id());
     match (name_map_entry, id_map_entry) {
       (_, BTEntry::Occupied(_)) => Err(MailboxError::already_exists("Mailbox ID", mailbox.id())),
-      (BTEntry::Occupied(_), _) => Err(MailboxError::already_exists("Mailbox name", mailbox.name())),
+      (BTEntry::Occupied(_), _) => {
+        Err(MailboxError::already_exists("Mailbox name", mailbox.name()))
+      }
       (BTEntry::Vacant(ne), BTEntry::Vacant(ie)) => {
         ne.insert(mailbox.id());
         ie.insert(mailbox.clone());
@@ -39,7 +47,9 @@ impl MailboxCache {
   }
 
   pub fn get_mailbox_for_owner(&self, owner: Target, name: &str) -> Option<Mailbox> {
-    self.mailbox_owner_map.get(&owner)
+    self
+      .mailbox_owner_map
+      .get(&owner)
       .and_then(|name_map| name_map.get(name))
       .and_then(|id| self.mailboxes.get(id))
       .and_then(|mailbox| Some(mailbox.clone()))
@@ -54,19 +64,18 @@ impl MailboxCache {
   }
 
   pub fn get_all_mailboxes(&self, owner: Target) -> Option<Vec<Mailbox>> {
-    self.mailbox_owner_map
-      .get(&owner)
-      .and_then(|name_map| {
-        let mut values = name_map.values()
-          .map(|v| self.mailboxes.get(v))
-          .filter_map(|option_mailbox| option_mailbox)
-          .map(|mailbox_ref| mailbox_ref.clone());
-        if values.any(|_| true) {
-          Some(values.collect())
-        } else {
-          None
-        }
-      })
+    self.mailbox_owner_map.get(&owner).and_then(|name_map| {
+      let mut values = name_map
+        .values()
+        .map(|v| self.mailboxes.get(v))
+        .filter_map(|option_mailbox| option_mailbox)
+        .map(|mailbox_ref| mailbox_ref.clone());
+      if values.any(|_| true) {
+        Some(values.collect())
+      } else {
+        None
+      }
+    })
   }
 
   /// Returns thread IDs if successful
@@ -74,23 +83,22 @@ impl MailboxCache {
     &mut self,
     owner: Target,
     name: &str,
-  ) -> Result<Vec<u64>, MailboxError>
-  {
+  ) -> Result<Vec<u64>, MailboxError> {
     let mut name_map_entry = match self.mailbox_owner_map.entry(owner.clone()) {
       HEntry::Occupied(e) => e,
       HEntry::Vacant(_) => return Err(MailboxError::not_found("entry for owner", owner)),
     };
-    let result =
-      if let BTEntry::Occupied(e) = name_map_entry.get_mut().entry(String::from(name)) {
-        trace!("Deleting mailbox {} for {}", name, owner);
-        let id = e.remove();
-        self.mailboxes
-          .remove(&id)
-          .map(|mb| mb.thread_ids)
-          .ok_or_else(|| MailboxError::not_found("mailbox id", id))
-      } else {
-        return Err(MailboxError::not_found("mailbox name map entry", name));
-      };
+    let result = if let BTEntry::Occupied(e) = name_map_entry.get_mut().entry(String::from(name)) {
+      trace!("Deleting mailbox {} for {}", name, owner);
+      let id = e.remove();
+      self
+        .mailboxes
+        .remove(&id)
+        .map(|mb| mb.thread_ids)
+        .ok_or_else(|| MailboxError::not_found("mailbox id", id))
+    } else {
+      return Err(MailboxError::not_found("mailbox name map entry", name));
+    };
     // If no more mailboxes are left for this owner, remove the map.
     if name_map_entry.get().is_empty() {
       name_map_entry.remove();
@@ -99,11 +107,7 @@ impl MailboxCache {
   }
 
   /// Returns thread IDs if successful
-  pub fn delete_mailbox_by_id(
-    &mut self,
-    id: u64,
-  ) -> Result<Vec<u64>, MailboxError>
-  {
+  pub fn delete_mailbox_by_id(&mut self, id: u64) -> Result<Vec<u64>, MailboxError> {
     let mailbox = match self.mailboxes.remove(&id) {
       Some(mb) => mb,
       None => {
@@ -111,7 +115,12 @@ impl MailboxCache {
         return Err(MailboxError::not_found("mailbox id", id));
       }
     };
-    trace!("Deleted mailbox #{} ({} for {})", id, mailbox.name(), mailbox.owner());
+    trace!(
+      "Deleted mailbox #{} ({} for {})",
+      id,
+      mailbox.name(),
+      mailbox.owner()
+    );
     let mut name_map_entry = match self.mailbox_owner_map.entry(mailbox.owner()) {
       HEntry::Occupied(e) => e,
       HEntry::Vacant(_) => {
@@ -129,11 +138,7 @@ impl MailboxCache {
   }
 
   /// Returns thread IDs for all mailboxes found.
-  pub fn delete_all_mailboxes(
-    &mut self,
-    owner: Target,
-  ) -> Result<Vec<u64>, MailboxError>
-  {
+  pub fn delete_all_mailboxes(&mut self, owner: Target) -> Result<Vec<u64>, MailboxError> {
     trace!("Deleting all mailboxes for {}", owner);
     let name_map_entry = match self.mailbox_owner_map.entry(owner.clone()) {
       HEntry::Occupied(e) => e,
@@ -159,7 +164,9 @@ pub struct MessageThreadCache {
 
 impl MessageThreadCache {
   pub fn new() -> Self {
-    MessageThreadCache { threads: BTreeMap::new() }
+    MessageThreadCache {
+      threads: BTreeMap::new(),
+    }
   }
 
   pub fn put_thread(&mut self, thread: MessageThread) -> Result<MessageThread, MailboxError> {
@@ -189,15 +196,17 @@ impl MessageThreadCache {
   /// Returns the message IDs of all the deleted threads.
   /// Ignores missing thread IDs.
   pub fn delete_threads(&mut self, ids: &[u64]) -> Vec<u64> {
-    ids
-      .into_iter()
-      .fold(Vec::new(), |mut ids, id| {
-        match self.threads.remove(id) {
-          Some(thread) => { ids.extend(&thread.message_ids); }
-          None => { debug!("Thread id {} missing", id); }
+    ids.into_iter().fold(Vec::new(), |mut ids, id| {
+      match self.threads.remove(id) {
+        Some(thread) => {
+          ids.extend(&thread.message_ids);
         }
-        ids
-      })
+        None => {
+          debug!("Thread id {} missing", id);
+        }
+      }
+      ids
+    })
   }
 }
 
@@ -223,7 +232,10 @@ impl MessageCache {
   }
 
   pub fn get_messages_by_id(&self, ids: &[u64]) -> Vec<Option<Message>> {
-    ids.iter().map(|id| self.messages.get(id).cloned()).collect()
+    ids
+      .iter()
+      .map(|id| self.messages.get(id).cloned())
+      .collect()
   }
 
   /// Ignores missing messages.

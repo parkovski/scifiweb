@@ -1,18 +1,31 @@
 use hyper::{Request, Response, StatusCode};
-use hyper::header::{ContentType, ContentLength};
+use hyper::header::{ContentLength, ContentType};
 use futures::Future;
-use comm::router::{builder, Params, ExtMap, GetAny, GetParam};
-use comm::router::hyper::{SharedMethodFilters, CommonMethods};
+use comm::router::{builder, ExtMap, GetAny, GetParam, Params};
+use comm::router::hyper::{CommonMethods, SharedMethodFilters};
 use instance::access::Accessor;
 use instance::Target;
 use instance::mailbox::MessageLimit;
 use util::future::SFFuture;
 use util::Pipe;
-use super::{Router, RouteFuture, FilterFuture};
+use super::{FilterFuture, RouteFuture, Router};
 use super::error::ErrorHandler;
 
-type RouterBuilder = builder::RouterBuilder<'static, Request, RouteFuture, FilterFuture, ErrorHandler>;
-type DirBuilder<P> = builder::DirBuilder<'static, Request, RouteFuture, FilterFuture, ErrorHandler, P>;
+type RouterBuilder = builder::RouterBuilder<
+  'static,
+  Request,
+  RouteFuture,
+  FilterFuture,
+  ErrorHandler,
+>;
+type DirBuilder<P> = builder::DirBuilder<
+  'static,
+  Request,
+  RouteFuture,
+  FilterFuture,
+  ErrorHandler,
+  P,
+>;
 
 fn response(content_type: ContentType, body: &str) -> Response {
   Response::new()
@@ -44,8 +57,7 @@ pub fn setup_routes<A: Accessor<'static> + 'static>(accessor: A) -> Router {
 fn setup_mailbox_routes<P, A: Accessor<'static> + 'static>(
   builder: DirBuilder<P>,
   methods: &CommonMethods,
-) -> RouterBuilder
-{
+) -> RouterBuilder {
   builder
     .dir("/mailbox")
       .route("/new", |_, params: &Params, ext: &mut ExtMap| -> RouteFuture {

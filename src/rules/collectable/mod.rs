@@ -4,10 +4,10 @@ use either::Either;
 use super::Event;
 
 mod redemption;
-pub use self::redemption::{ RedemptionList, Redemption };
+pub use self::redemption::{Redemption, RedemptionList};
 
 mod upgrade;
-pub use self::upgrade::{ UpgradeList, Upgrade };
+pub use self::upgrade::{Upgrade, UpgradeList};
 
 pub struct Collectable<'a> {
   pub name: String,
@@ -24,7 +24,12 @@ impl<'a> Collectable<'a> {
     }
   }
 
-  pub fn add_collectable_redemption(&'a mut self, owned_amount: i32, owned_kind: *const Collectable<'a>, redeemable_amount: i32) {
+  pub fn add_collectable_redemption(
+    &'a mut self,
+    owned_amount: i32,
+    owned_kind: *const Collectable<'a>,
+    redeemable_amount: i32,
+  ) {
     let redeemable_kind = self as *const _;
     self.redemptions.add(Redemption {
       owned_kind: Either::Left(owned_kind),
@@ -44,7 +49,12 @@ impl<'a> Collectable<'a> {
     });
   }
 
-  pub fn add_upgrade(&'a mut self, owned_amount: i32, owned_kind: *const Collectable<'a>, upgrade_applicable_level: i32) {
+  pub fn add_upgrade(
+    &'a mut self,
+    owned_amount: i32,
+    owned_kind: *const Collectable<'a>,
+    upgrade_applicable_level: i32,
+  ) {
     let upgrade_kind = self as *const _;
     self.upgrades.add(Upgrade {
       owned_kind,
@@ -67,4 +77,4 @@ impl<'a> PartialEq for Collectable<'a> {
   }
 }
 
-impl<'a> Eq for Collectable<'a> { }
+impl<'a> Eq for Collectable<'a> {}

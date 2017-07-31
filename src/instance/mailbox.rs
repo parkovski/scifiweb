@@ -22,14 +22,13 @@ impl Message {
     content: String,
     title: Option<String>,
     expire: Option<Duration>,
-  ) -> Self
-  {
+  ) -> Self {
     Message {
       id,
       sender,
       content: content.into_boxed_str(),
       title: title.map(String::into_boxed_str),
-      expire
+      expire,
     }
   }
 
@@ -108,8 +107,12 @@ impl FromStr for MessageLimit {
   fn from_str(s: &str) -> Result<Self, FormatError> {
     if s == "none" {
       Ok(MessageLimit::None)
-    } else if { let b = s.as_bytes(); b[b.len() - 1] == b's' } {
-      s[0..s.len()-1].parse::<u64>()
+    } else if {
+      let b = s.as_bytes();
+      b[b.len() - 1] == b's'
+    } {
+      s[0..s.len() - 1]
+        .parse::<u64>()
         .map(|secs| MessageLimit::Duration(Duration::new(secs, 0)))
         .map_err(|_| Self::format_error())
     } else {
@@ -137,8 +140,7 @@ impl Mailbox {
     name: String,
     message_limit: MessageLimit,
     thread_limit: u32,
-  ) -> Self
-  {
+  ) -> Self {
     Mailbox {
       id,
       owner,
@@ -194,7 +196,10 @@ pub struct MailboxError {
 
 impl MailboxError {
   pub fn new<S: ToString>(kind: MailboxErrorKind, description: S) -> Self {
-    MailboxError { kind, description: description.to_string().into_boxed_str() }
+    MailboxError {
+      kind,
+      description: description.to_string().into_boxed_str(),
+    }
   }
 
   pub fn no_accessor() -> Self {
@@ -202,18 +207,27 @@ impl MailboxError {
   }
 
   pub fn not_found<I: Display>(index_type: &str, index: I) -> Self {
-    Self::new(MailboxErrorKind::NotFound, format!("Mailbox index {} (type {}) not found", index, index_type))
+    Self::new(
+      MailboxErrorKind::NotFound,
+      format!("Mailbox index {} (type {}) not found", index, index_type),
+    )
   }
 
   pub fn operation_not_supported(operation: &str) -> Self {
-    Self::new(MailboxErrorKind::OperationNotSupported, format!("Mailbox operation not supported: {}", operation))
+    Self::new(
+      MailboxErrorKind::OperationNotSupported,
+      format!("Mailbox operation not supported: {}", operation),
+    )
   }
 
   pub fn already_exists<N: Display>(thing: &str, name: N) -> Self {
-    Self::new(MailboxErrorKind::AlreadyExists, format!("{} {} already exists", thing, name))
+    Self::new(
+      MailboxErrorKind::AlreadyExists,
+      format!("{} {} already exists", thing, name),
+    )
   }
 
-  pub fn into_future<'a, T: 'a>(self) -> Box<Future<Item=T, Error=Self> + 'a> {
+  pub fn into_future<'a, T: 'a>(self) -> Box<Future<Item = T, Error = Self> + 'a> {
     Box::new(future::result(Err(self)))
   }
 }

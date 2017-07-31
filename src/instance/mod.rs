@@ -13,7 +13,7 @@ pub use self::group::Group;
 pub mod mailbox;
 mod notification;
 mod profile;
-pub use self::profile::{ Profile, ProfileId };
+pub use self::profile::{Profile, ProfileId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Target {
@@ -47,10 +47,18 @@ impl FromStr for Target {
       Ok(Target::Global)
     } else if let Some(split) = s.find(':') {
       match &s[0..split] {
-        "pid" => s[split + 1..].parse::<u64>().map(|id| Target::ProfileId(id)).map_err(|_| Self::format_error()),
-        "gid" => s[split + 1..].parse::<u64>().map(|id| Target::GroupId(id)).map_err(|_| Self::format_error()),
-        "gty" => Ok(Target::GroupType(rules::GroupType::new(s[split + 1..].to_owned()))),
-        _ => Err(Self::format_error())
+        "pid" => s[split + 1..]
+          .parse::<u64>()
+          .map(|id| Target::ProfileId(id))
+          .map_err(|_| Self::format_error()),
+        "gid" => s[split + 1..]
+          .parse::<u64>()
+          .map(|id| Target::GroupId(id))
+          .map_err(|_| Self::format_error()),
+        "gty" => Ok(Target::GroupType(
+          rules::GroupType::new(s[split + 1..].to_owned()),
+        )),
+        _ => Err(Self::format_error()),
       }
     } else {
       Err(Self::format_error())

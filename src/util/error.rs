@@ -1,4 +1,4 @@
-use std::{io, fmt};
+use std::{fmt, io};
 use std::error::Error;
 use serde::de;
 use serde_json;
@@ -27,7 +27,10 @@ impl Error for JsonError {
 }
 
 impl de::Error for JsonError {
-  fn custom<T>(msg: T) -> Self where T : fmt::Display {
+  fn custom<T>(msg: T) -> Self
+  where
+    T: fmt::Display,
+  {
     JsonError::Deserialize(format!("{}", msg))
   }
 }

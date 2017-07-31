@@ -1,6 +1,5 @@
 pub mod config;
 pub mod future;
-#[macro_use]
 pub mod error;
 pub mod log;
 pub mod rwlock;

@@ -1,6 +1,6 @@
 use std::time::Instant;
 use std::io::Write;
-use log::{Log, LogRecord, LogLevel, LogMetadata, MaxLogLevelFilter, LogLevelFilter, set_logger};
+use log::{set_logger, Log, LogLevel, LogLevelFilter, LogMetadata, LogRecord, MaxLogLevelFilter};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn init() -> Result<(), ::log::SetLoggerError> {
@@ -36,7 +36,9 @@ impl Log for Logger {
   // If a log or color function fails, too bad...
   #[allow(unused_must_use)]
   fn log(&self, record: &LogRecord) {
-    if !self.enabled(record.metadata()) || !self.filter(record) { return; }
+    if !self.enabled(record.metadata()) || !self.filter(record) {
+      return;
+    }
     let mut stderr = StandardStream::stderr(ColorChoice::Always);
     let (color, title) = match record.metadata().level() {
       LogLevel::Debug => (Color::Green, "debug"),
@@ -49,10 +51,19 @@ impl Log for Logger {
     stderr.set_color(color_spec.set_fg(Some(color.clone())).set_bold(true));
     write!(&mut stderr, "{} [", title);
     stderr.reset();
-    write!(&mut stderr, "{}s", (Instant::now() - self.start_time).as_secs());
+    write!(
+      &mut stderr,
+      "{}s",
+      (Instant::now() - self.start_time).as_secs()
+    );
     stderr.set_color(color_spec.set_fg(Some(color)).set_bold(true));
     write!(&mut stderr, "]:");
     stderr.reset();
-    writeln!(&mut stderr, " ({}): {}", record.location().module_path(), record.args());
+    writeln!(
+      &mut stderr,
+      " ({}): {}",
+      record.location().module_path(),
+      record.args()
+    );
   }
 }

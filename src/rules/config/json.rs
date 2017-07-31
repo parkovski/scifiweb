@@ -4,7 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::marker::PhantomData;
 
-use serde::de::{self, Deserializer, Visitor, MapAccess};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde_json;
 
 use util::error::JsonError;
@@ -12,11 +12,17 @@ use util::error::JsonError;
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum Redemption {
-  Event { amount: i32, #[serde(rename = "costEvent")] cost_event: String },
+  Event {
+    amount: i32,
+    #[serde(rename = "costEvent")]
+    cost_event: String,
+  },
   Collectable {
     amount: i32,
-    #[serde(rename = "costCollectable")] cost_collectable: String,
-    #[serde(rename = "costAmount")] cost_amount: i32
+    #[serde(rename = "costCollectable")]
+    cost_collectable: String,
+    #[serde(rename = "costAmount")]
+    cost_amount: i32,
   },
 }
 
@@ -62,7 +68,8 @@ pub struct Event {
 }
 
 fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Error>
-  where D: Deserializer<'de>
+where
+  D: Deserializer<'de>,
 {
   struct StringOrEventTarget(PhantomData<EventTarget>);
 
@@ -70,38 +77,58 @@ fn string_or_event_target<'de, D>(deserializer: D) -> Result<EventTarget, D::Err
     type Value = EventTarget;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-      formatter.write_str("\"global\", \"profile\", \"group\" or {\"groupType\":\"groupName\"}")
+      formatter.write_str(
+        "\"global\", \"profile\", \"group\" or {\"groupType\":\"groupName\"}",
+      )
     }
 
     fn visit_str<E>(self, value: &str) -> Result<EventTarget, E>
-      where E: de::Error
+    where
+      E: de::Error,
     {
       Ok(match value {
         "global" => EventTarget::Global,
         "profile" => EventTarget::Profile,
         "group" => EventTarget::GroupType(None),
-        _ => return Err(de::Error::invalid_value(de::Unexpected::Str(value), &"global, group, or profile")),
+        _ => {
+          return Err(de::Error::invalid_value(
+            de::Unexpected::Str(value),
+            &"global, group, or profile",
+          ))
+        }
       })
     }
 
     fn visit_map<M>(self, mut visitor: M) -> Result<EventTarget, M::Error>
-      where M: MapAccess<'de>
+    where
+      M: MapAccess<'de>,
     {
       let result = match visitor.next_key::<String>() {
         Ok(Some(ref key)) if key == "groupType" => {
           if let Ok(value) = visitor.next_value::<String>() {
             Ok(EventTarget::GroupType(Some(value)))
           } else {
-            return Err(de::Error::invalid_type(de::Unexpected::Other("non-string"), &"string"))
+            return Err(de::Error::invalid_type(
+              de::Unexpected::Other("non-string"),
+              &"string",
+            ));
           }
         }
-        _ => return Err(de::Error::invalid_value(de::Unexpected::Other("anything that's not the string \"groupType\""), &"group")),
+        _ => {
+          return Err(de::Error::invalid_value(
+            de::Unexpected::Other("anything that's not the string \"groupType\""),
+            &"group",
+          ))
+        }
       };
 
       if let Ok(None) = visitor.next_key::<String>() {
         result
       } else {
-        Err(de::Error::invalid_length(visitor.size_hint().unwrap_or(2), &"one key named \"groupType\""))
+        Err(de::Error::invalid_length(
+          visitor.size_hint().unwrap_or(2),
+          &"one key named \"groupType\"",
+        ))
       }
     }
   }

@@ -60,11 +60,17 @@ impl<'s> GetAny<&'s str> for HashMap<String, Box<Any>> {
   type Error = ParamError;
 
   fn get_any<'a, V: 'static>(&'a self, key: &'s str) -> Result<&'a V, ParamError> {
-    self.get(key).and_then(|any| any.downcast_ref()).ok_or_else(|| ParamError::not_found("Extension param", key))
+    self
+      .get(key)
+      .and_then(|any| any.downcast_ref())
+      .ok_or_else(|| ParamError::not_found("Extension param", key))
   }
 
   fn get_any_mut<'a, V: 'static>(&'a mut self, key: &'s str) -> Result<&'a mut V, ParamError> {
-    self.get_mut(key).and_then(|any| any.downcast_mut()).ok_or_else(|| ParamError::not_found("Extension param", key))
+    self
+      .get_mut(key)
+      .and_then(|any| any.downcast_mut())
+      .ok_or_else(|| ParamError::not_found("Extension param", key))
   }
 }
 
@@ -84,7 +90,9 @@ impl GetParam for Params {
 
   fn get_param<T: FromStr>(&self, key: &str) -> Result<T, ParamError> {
     if let Some(param) = self.find(key) {
-      param.parse::<T>().map_err(|_| ParamError::invalid_conversion(param))
+      param
+        .parse::<T>()
+        .map_err(|_| ParamError::invalid_conversion(param))
     } else {
       Err(ParamError::not_found("route param", key))
     }
@@ -100,8 +108,9 @@ pub trait Route<'a, Rq>: Send + Sync {
 /// TODO: Is there any way to implement this so you don't
 /// have to list out the types in every closure?
 impl<'a, Rq, F, Fut> Route<'a, Rq> for F
-where F: Fn(Rq, &Params, &mut ExtMap) -> Fut + Send + Sync + 'a,
-      Fut: Future + 'a,
+where
+  F: Fn(Rq, &Params, &mut ExtMap) -> Fut + Send + Sync + 'a,
+  Fut: Future + 'a,
 {
   type Future = Fut;
 
@@ -119,14 +128,15 @@ pub enum Rejection<Rs, E> {
 /// A successful filter just calls the next filter or
 /// handler; a failed filter provides a response.
 pub trait Filter<'a, Rq, Rs, E>: Send + Sync {
-  type Future: Future<Item=(), Error=Rejection<Rs, E>>;
+  type Future: Future<Item = (), Error = Rejection<Rs, E>>;
 
   fn call(&self, req: &Rq, params: &Params, ext: &mut ExtMap) -> Self::Future;
 }
 
 impl<'a, Rq, Rs, E, F, Fut> Filter<'a, Rq, Rs, E> for F
-  where F: Fn(&Rq, &Params, &mut ExtMap) -> Fut + Send + Sync + 'a,
-        Fut: Future<Item=(), Error=Rejection<Rs, E>> + 'a,
+where
+  F: Fn(&Rq, &Params, &mut ExtMap) -> Fut + Send + Sync + 'a,
+  Fut: Future<Item = (), Error = Rejection<Rs, E>> + 'a,
 {
   type Future = Fut;
 
@@ -145,9 +155,10 @@ pub trait ErrorHandler<'a, E> {
 }
 
 impl<'a, E, F, G, Fut> ErrorHandler<'a, E> for (F, G)
-  where F: Fn(E) -> Fut,
-        G: Fn(&str) -> Fut,
-        Fut: Future + 'a,
+where
+  F: Fn(E) -> Fut,
+  G: Fn(&str) -> Fut,
+  Fut: Future + 'a,
 {
   type Future = Fut;
 
@@ -161,8 +172,9 @@ impl<'a, E, F, G, Fut> ErrorHandler<'a, E> for (F, G)
 }
 
 impl<'a, E, F, Fut> ErrorHandler<'a, E> for F
-  where F: Fn(Either<E, &str>) -> Fut,
-        Fut: Future + 'a,
+where
+  F: Fn(Either<E, &str>) -> Fut,
+  Fut: Future + 'a,
 {
   type Future = Fut;
 

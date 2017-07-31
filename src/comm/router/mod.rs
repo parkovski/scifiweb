@@ -1,8 +1,9 @@
 pub mod builder;
 mod handlers;
-pub use self::handlers::{Params, Rejection, ExtMap, GetAny, GetParam, ParamError};
 pub mod hyper;
 mod router;
+
+pub use self::handlers::{ExtMap, GetAny, GetParam, ParamError, Params, Rejection};
 pub use self::router::Router;
 
 #[cfg(test)]
@@ -31,7 +32,11 @@ mod test {
     type Future = FutureResult<(), Rejection<(), ()>>;
 
     fn call(&self, _req: &Rc<Cell<String>>, _params: &Params, _ext: &mut ExtMap) -> Self::Future {
-      if self.0 { future::ok(()) } else { future::err(Rejection::Response(())) }
+      if self.0 {
+        future::ok(())
+      } else {
+        future::err(Rejection::Response(()))
+      }
     }
   }
 
@@ -45,7 +50,11 @@ mod test {
         if self.1 == password {
           return future::ok(());
         }
-        req.set(format!("Denying password '{}' for param '{}'\n", password, self.0));
+        req.set(format!(
+          "Denying password '{}' for param '{}'\n",
+          password,
+          self.0
+        ));
       } else {
         req.set("Bug! Param not present.".to_string())
       }
@@ -69,23 +78,28 @@ mod test {
 
       let router = builder
         .dir("/test")
-          .with_filter(BoolFilter(true))
-          .dir(":hi")
-            .with_filter(PasswordFilter("hi", "hi"))
-            .route("/foo", AppendHandler("/test/:hi/foo"))
-            .to_root()
+        .with_filter(BoolFilter(true))
+        .dir(":hi")
+        .with_filter(PasswordFilter("hi", "hi"))
+        .route("/foo", AppendHandler("/test/:hi/foo"))
+        .to_root()
         .route("/:param/hi", AppendHandler("/:param/hi"))
         .dir("/foo")
-          .with_filter(BoolFilter(false))
-          .route("/bar", AppendHandler("/foo/bar"))
+        .with_filter(BoolFilter(false))
+        .route("/bar", AppendHandler("/foo/bar"))
         .build();
-      
+
 
       #[allow(unused_must_use)]
       {
         let paths = [
-          "/test/hi/foo", "/test/bye/foo", "/hello/hi",
-          "/test/hi", "/foo/bar", "/test/foo", "/notfound"
+          "/test/hi/foo",
+          "/test/bye/foo",
+          "/hello/hi",
+          "/test/hi",
+          "/foo/bar",
+          "/test/foo",
+          "/notfound",
         ];
         for path in &paths {
           let out = Rc::new(Cell::new(String::new()));
@@ -95,8 +109,7 @@ mod test {
       }
     }
 
-    const EXPECTED: &'static str =
-r#"/test/:hi/foo: Params { map: {"hi": "hi"} }
+    const EXPECTED: &'static str = r#"/test/:hi/foo: Params { map: {"hi": "hi"} }
 Denying password 'bye' for param 'hi'
 /:param/hi: Params { map: {"param": "hello"} }
 /:param/hi: Params { map: {"param": "test"} }

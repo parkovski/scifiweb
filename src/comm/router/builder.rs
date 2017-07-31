@@ -1,17 +1,20 @@
 use std::sync::Arc;
 use futures::Future;
-use route_recognizer::{Router as Recognizer};
+use route_recognizer::Router as Recognizer;
 use super::router::Router;
-pub use super::handlers::{Route, Filter, ErrorHandler};
+pub use super::handlers::{ErrorHandler, Filter, Route};
 use super::Rejection;
 
-pub(in super) struct RouteEntry<'a, Rq, Fut: Future + 'a> {
-  pub handler: Box<Route<'a, Rq, Future=Fut> + 'a>,
+pub(super) struct RouteEntry<'a, Rq, Fut: Future + 'a> {
+  pub handler: Box<Route<'a, Rq, Future = Fut> + 'a>,
   pub filter_indexes: Arc<Vec<u32>>,
 }
 
-pub(in super) struct FilterEntry<'a, Rq, Rs, E, Fut: Future<Item=(), Error=Rejection<Rs, E>> + 'a> {
-  pub handler: Box<Filter<'a, Rq, Rs, E, Future=Fut> + 'a>,
+pub(super) struct FilterEntry<'a, Rq, Rs, E, Fut>
+where
+  Fut: Future<Item = (), Error = Rejection<Rs, E>> + 'a,
+{
+  pub handler: Box<Filter<'a, Rq, Rs, E, Future = Fut> + 'a>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -26,22 +29,24 @@ impl FilterHandle {
 }
 
 pub trait IntoFilterHandle<'a, Rq, RFut, FFut, EH>
-where Rq: 'a,
-      RFut: Future + 'a,
-      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error> + 'a,
-      EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
   fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle;
 }
 
 impl<'a, Rq, RFut, FFut, EH, F> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for F
-where Rq: 'a,
-      RFut: Future + 'a,
-      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error> + 'a,
-      EH::Future: Future<Item=RFut::Item> + 'a,
-      F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
+  F: Filter<'a, Rq, RFut::Item, RFut::Error, Future = FFut> + 'a,
 {
   fn into_filter_handle(self, builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
     builder.new_filter(self)
@@ -49,61 +54,27 @@ where Rq: 'a,
 }
 
 impl<'a, Rq, RFut, FFut, EH> IntoFilterHandle<'a, Rq, RFut, FFut, EH> for FilterHandle
-where Rq: 'a,
-      RFut: Future + 'a,
-      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error> + 'a,
-      EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
-  fn into_filter_handle(self, _builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
+  fn into_filter_handle(
+    self,
+    _builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>,
+  ) -> FilterHandle {
     self
   }
 }
-/*
-pub trait Builder<'a, Rq, RFut, FFut, EH>: Sized
-where Rq: 'a,
-      RFut: Future + 'a,
-      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-      EH: ErrorHandler<'a, RFut::Error, Future=RFut> + 'a,
-{
-  /// Add a route. If inside a DirBuilder, this mounts
-  /// the route inside that directory with any global filters
-  /// on the router and any directory-level filters.
-  fn route<R>(self, path: &str, handler: R) -> Self
-    where R: Route<'a, Rq, Future=RFut> + 'a;
-  
-  /// Create a new filter not yet associated with any
-  /// route or directory.
-  fn new_filter<F>(&mut self, handler: F) -> FilterHandle
-    where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a;
-  
-  /// Add a filter to the last route or directory created.
-  /// If none was created yet, or a DirBuilder was just exited,
-  /// this will add a global filter if at the top level, or a
-  /// directory-level filter if in a DirBuilder.
-  fn with_filter<F>(self, handler: F) -> Self
-    where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a;
-
-  /// Add a filter from a FilterHandle created with new_filter.
-  /// This way, filters can be reused for multiple routes.
-  fn with_shared_filter(self, handle: FilterHandle) -> Self;
-
-  /// Enter a new directory. This is not necessary just to mount routes
-  /// containing multiple sections (/foo/bar/baz) - the purpose of directories
-  /// is to add filters that apply to all sub-routes within them,
-  /// e.g. authenticate /admin/(*).
-  fn dir(self, path: &str) -> DirBuilder<'a, Rq, RFut, FFut, EH, Self>;
-
-  /// Create the router, consuming the builder.
-  fn build(self) -> Router<'a, Rq, RFut, FFut, EH>;
-}
-*/
 
 pub struct RouterBuilder<'a, Rq, RFut, FFut, EH>
-  where RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
   recognizer: Recognizer<u32>,
   routes: Vec<RouteEntry<'a, Rq, RFut>>,
@@ -126,11 +97,12 @@ fn add_index_unique(vec: &mut Arc<Vec<u32>>, index: u32) {
 }
 
 impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
-  where Rq: 'a,
-        RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
   pub fn new(error_handler: EH) -> Self {
     RouterBuilder {
@@ -144,21 +116,29 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
   }
 
   fn new_route<R>(&mut self, path: &str, filter_indexes: Arc<Vec<u32>>, handler: R) -> u32
-  where R: Route<'a, Rq, Future=RFut> + 'a
+  where
+    R: Route<'a, Rq, Future = RFut> + 'a,
   {
     let index = self.routes.len() as u32;
     let handler = Box::new(handler);
-    self.routes.push(RouteEntry { handler, filter_indexes });
+    self.routes.push(RouteEntry {
+      handler,
+      filter_indexes,
+    });
     self.recognizer.add(path, index);
     index
   }
 
   fn add_filter_to_route(&mut self, route_index: u32, filter_index: u32) {
-    add_index_unique(&mut self.routes[route_index as usize].filter_indexes, filter_index);
+    add_index_unique(
+      &mut self.routes[route_index as usize].filter_indexes,
+      filter_index,
+    );
   }
 
   pub fn route<R>(mut self, path: &str, handler: R) -> Self
-    where R: Route<'a, Rq, Future=RFut> + 'a
+  where
+    R: Route<'a, Rq, Future = RFut> + 'a,
   {
     let filter_indexes = self.global_filters.clone();
     let route_index = self.new_route(path, filter_indexes, handler);
@@ -167,15 +147,19 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
   }
 
   pub fn new_filter<F>(&mut self, handler: F) -> FilterHandle
-  where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a
+  where
+    F: Filter<'a, Rq, RFut::Item, RFut::Error, Future = FFut> + 'a,
   {
     let index = self.filters.len();
-    self.filters.push(FilterEntry { handler: Box::new(handler) });
+    self.filters.push(FilterEntry {
+      handler: Box::new(handler),
+    });
     FilterHandle::new(index as u32)
   }
 
   pub fn with_filter<F>(mut self, handler: F) -> Self
-    where F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>
+  where
+    F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>,
   {
     let filter_handle = handler.into_filter_handle(&mut self);
     match self.last_route_index {
@@ -185,9 +169,7 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
     self
   }
 
-  pub fn dir(mut self, path: &str)
-    -> DirBuilder<'a, Rq, RFut, FFut, EH, Self>
-  {
+  pub fn dir(mut self, path: &str) -> DirBuilder<'a, Rq, RFut, FFut, EH, Self> {
     // After building a dir, it would be unintuitive
     // for filters to stick to the last route before that.
     self.last_route_index = None;
@@ -206,21 +188,22 @@ impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
       self.recognizer,
       Arc::new(self.routes),
       Arc::new(self.filters),
-      self.error_handler
+      self.error_handler,
     )
   }
 }
 
-const ONLY_ACCESSIBLE_BUILDER_HAS_REF: &'static str
-  = "This reference is always transfered to the only accessible DirBuilder";
+const ONLY_ACCESSIBLE_BUILDER_HAS_REF: &'static str =
+  "This reference is always transfered to the only accessible DirBuilder";
 
 pub struct DirBuilder<'a, Rq, RFut, FFut, EH, Par>
-  where Rq: 'a,
-        RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
-        Par: Sized + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
+  Par: Sized + 'a,
 {
   router_builder: Option<Box<RouterBuilder<'a, Rq, RFut, FFut, EH>>>,
   parent: Option<Box<Par>>,
@@ -229,12 +212,12 @@ pub struct DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   last_route_index: Option<u32>,
 }
 
-impl<'a, Rq, RFut, FFut, EH, Par>
-DirBuilder<'a, Rq, RFut, FFut, EH, Par>
-  where RFut: Future,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-        EH: ErrorHandler<'a, RFut::Error>,
-        EH::Future: Future<Item=RFut::Item>,
+impl<'a, Rq, RFut, FFut, EH, Par> DirBuilder<'a, Rq, RFut, FFut, EH, Par>
+where
+  RFut: Future,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>>,
+  EH: ErrorHandler<'a, RFut::Error>,
+  EH::Future: Future<Item = RFut::Item>,
 {
   /// Join two paths, converting either zero or
   /// two slashes to one at the join point.
@@ -256,27 +239,34 @@ DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   }
 
   pub fn route<R>(mut self, path: &str, handler: R) -> Self
-  where R: Route<'a, Rq, Future=RFut> + 'a
+  where
+    R: Route<'a, Rq, Future = RFut> + 'a,
   {
     let path = self.join_path(path);
     self.last_route_index = Some(
-      self.router_builder.as_mut().expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF).new_route(
-        path.as_str(),
-        self.filter_indexes.clone(),
-        handler,
-      )
+      self
+        .router_builder
+        .as_mut()
+        .expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)
+        .new_route(path.as_str(), self.filter_indexes.clone(), handler),
     );
     self
   }
 
   pub fn new_filter<F>(&mut self, handler: F) -> FilterHandle
-  where F: Filter<'a, Rq, RFut::Item, RFut::Error, Future=FFut> + 'a
+  where
+    F: Filter<'a, Rq, RFut::Item, RFut::Error, Future = FFut> + 'a,
   {
-    self.router_builder.as_mut().expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF).new_filter(handler)
+    self
+      .router_builder
+      .as_mut()
+      .expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)
+      .new_filter(handler)
   }
 
   pub fn with_filter<F>(mut self, handler: F) -> Self
-  where F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>
+  where
+    F: IntoFilterHandle<'a, Rq, RFut, FFut, EH>,
   {
     match (self.last_route_index, self.router_builder.as_mut()) {
       (Some(route), Some(router_builder)) => {
@@ -306,19 +296,20 @@ DirBuilder<'a, Rq, RFut, FFut, EH, Par>
   }
 
   pub fn build(self) -> Router<'a, Rq, RFut, FFut, EH> {
-    self.router_builder.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF).build()
+    self
+      .router_builder
+      .expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)
+      .build()
   }
 }
 
 impl<'a, Rq, RFut, FFut, EH, Par>
-DirBuilder<
-  'a, Rq, RFut, FFut, EH,
-  DirBuilder<'a, Rq, RFut, FFut, EH, Par>
->
-where RFut: Future,
-      FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-      EH: ErrorHandler<'a, RFut::Error>,
-      EH::Future: Future<Item=RFut::Item>,
+  DirBuilder<'a, Rq, RFut, FFut, EH, DirBuilder<'a, Rq, RFut, FFut, EH, Par>>
+where
+  RFut: Future,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>>,
+  EH: ErrorHandler<'a, RFut::Error>,
+  EH::Future: Future<Item = RFut::Item>,
 {
   pub fn up(self) -> DirBuilder<'a, Rq, RFut, FFut, EH, Par> {
     let mut parent = self.parent.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF);
@@ -328,14 +319,12 @@ where RFut: Future,
 }
 
 impl<'a, Rq, RFut, FFut, EH>
-DirBuilder<
-  'a, Rq, RFut, FFut, EH,
-  RouterBuilder<'a, Rq, RFut, FFut, EH>
->
-  where RFut: Future,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>>,
-        EH: ErrorHandler<'a, RFut::Error>,
-        EH::Future: Future<Item=RFut::Item>,
+  DirBuilder<'a, Rq, RFut, FFut, EH, RouterBuilder<'a, Rq, RFut, FFut, EH>>
+where
+  RFut: Future,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>>,
+  EH: ErrorHandler<'a, RFut::Error>,
+  EH::Future: Future<Item = RFut::Item>,
 {
   pub fn up(self) -> RouterBuilder<'a, Rq, RFut, FFut, EH> {
     *self.router_builder.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)

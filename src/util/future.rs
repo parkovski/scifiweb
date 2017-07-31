@@ -1,14 +1,19 @@
 use std::ops::Try;
-use futures::{Future, Poll, IntoFuture};
+use futures::{Future, IntoFuture, Poll};
 use super::IntoBox;
 
 pub struct SFFuture<'a, Item, Error> {
-  inner: Box<Future<Item=Item, Error=Error> + Send + 'a>,
+  inner: Box<Future<Item = Item, Error = Error> + Send + 'a>,
 }
 
 impl<'a, Item, Error> SFFuture<'a, Item, Error> {
-  pub fn new<F: IntoFuture<Item=Item, Error=Error> + 'a>(f: F) -> Self where F::Future: Send {
-    SFFuture { inner: f.into_future().into_box() }
+  pub fn new<F: IntoFuture<Item = Item, Error = Error> + 'a>(f: F) -> Self
+  where
+    F::Future: Send,
+  {
+    SFFuture {
+      inner: f.into_future().into_box(),
+    }
   }
 }
 
@@ -31,10 +36,14 @@ impl<'a, Item: Send + 'a, Error: Send + 'a> Try for SFFuture<'a, Item, Error> {
   }
 
   fn from_error(v: Error) -> Self {
-    SFFuture { inner: Box::new(Err(v).into_future()) }
+    SFFuture {
+      inner: Box::new(Err(v).into_future()),
+    }
   }
 
   fn from_ok(v: Item) -> Self {
-    SFFuture { inner: Box::new(Ok(v).into_future()) }
+    SFFuture {
+      inner: Box::new(Ok(v).into_future()),
+    }
   }
 }

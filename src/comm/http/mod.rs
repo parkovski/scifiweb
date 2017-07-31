@@ -17,7 +17,8 @@ pub type Router = router::Router<'static, Request, RouteFuture, FilterFuture, Er
 
 pub fn start<A: Accessor<'static> + 'static>(addr: &str, accessor: A) -> hyper::Result<()> {
   let router = Arc::new(HyperRouter::new(setup_routes(accessor)));
-  let server = Http::new().bind(&addr.parse().unwrap(), move || Ok(router.clone()))?;
+  let server = Http::new()
+    .bind(&addr.parse().unwrap(), move || Ok(router.clone()))?;
   info!("Starting HTTP server for {}", addr);
   server.run()
 }

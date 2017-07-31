@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use hyper::{Request, Response, Error as HyperError, Method};
+use hyper::{Error as HyperError, Method, Request, Response};
 use hyper::server::Service;
 use futures::Future;
-use super::{Params, Rejection, ExtMap};
-use super::router::{Router, RoutePath};
-use super::builder::{RouterBuilder, Filter, FilterHandle, ErrorHandler};
+use super::{ExtMap, Params, Rejection};
+use super::router::{RoutePath, Router};
+use super::builder::{ErrorHandler, Filter, FilterHandle, RouterBuilder};
 
 impl RoutePath for ::hyper::server::Request {
   fn route_path(&self) -> &str {
@@ -13,38 +13,38 @@ impl RoutePath for ::hyper::server::Request {
 }
 
 pub struct HyperRouter<'a, RFut, FFut, E, EH>
-where RFut: Future<Item=Response, Error=E> + 'a,
-      FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
-      EH: ErrorHandler<'a, E> + 'a,
-      EH::Future: Future<Item=RFut::Item, Error=HyperError> + 'a,
+where
+  RFut: Future<Item = Response, Error = E> + 'a,
+  FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
+  EH: ErrorHandler<'a, E> + 'a,
+  EH::Future: Future<Item = RFut::Item, Error = HyperError> + 'a,
 {
   router: Router<'a, Request, RFut, FFut, EH>,
 }
 
 impl<'a, RFut, FFut, E, EH> HyperRouter<'a, RFut, FFut, E, EH>
-  where RFut: Future<Item=Response, Error=E> + 'a,
-        FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
-        EH: ErrorHandler<'a, E> + 'a,
-        EH::Future: Future<Item=RFut::Item, Error=HyperError> + 'a,
+where
+  RFut: Future<Item = Response, Error = E> + 'a,
+  FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
+  EH: ErrorHandler<'a, E> + 'a,
+  EH::Future: Future<Item = RFut::Item, Error = HyperError> + 'a,
 {
-  pub fn new(
-    router: Router<'a, Request, RFut, FFut, EH>
-  ) -> Self
-  {
+  pub fn new(router: Router<'a, Request, RFut, FFut, EH>) -> Self {
     HyperRouter { router }
   }
 }
 
 impl<'a, RFut, FFut, E, EH> Service for HyperRouter<'a, RFut, FFut, E, EH>
-  where RFut: Future<Item=Response, Error=E> + 'a,
-        FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
-        EH: ErrorHandler<'a, E> + 'a,
-        EH::Future: Future<Item=RFut::Item, Error=HyperError> + 'a,
+where
+  RFut: Future<Item = Response, Error = E> + 'a,
+  FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
+  EH: ErrorHandler<'a, E> + 'a,
+  EH::Future: Future<Item = RFut::Item, Error = HyperError> + 'a,
 {
   type Request = Request;
   type Response = Response;
   type Error = HyperError;
-  type Future = Box<Future<Item=Response, Error=HyperError> + 'a>;
+  type Future = Box<Future<Item = Response, Error = HyperError> + 'a>;
 
   fn call(&self, req: Request) -> Self::Future {
     self.router.run(req)
@@ -58,13 +58,17 @@ struct MethodFilter<F> {
 
 impl<F> MethodFilter<F> {
   pub fn new(make_future: Arc<F>, method: Method) -> Self {
-    MethodFilter { method, make_future }
+    MethodFilter {
+      method,
+      make_future,
+    }
   }
 }
 
 impl<'a, F, FFut, E> Filter<'a, Request, Response, E> for MethodFilter<F>
-where F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
-      FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
+where
+  F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
+  FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
 {
   type Future = FFut;
 
@@ -112,11 +116,12 @@ impl<F> SharedMethodFilters<F> {
     builder: &mut RouterBuilder<'a, Request, RFut, FFut, EH>,
     make_future: F,
   ) -> Self
-  where RFut: Future<Item=Response, Error=E> + 'a,
-        FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
-        EH: ErrorHandler<'a, E> + 'a,
-        EH::Future: Future<Item=RFut::Item, Error=HyperError> + 'a,
-        F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
+  where
+    RFut: Future<Item = Response, Error = E> + 'a,
+    FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
+    EH: ErrorHandler<'a, E> + 'a,
+    EH::Future: Future<Item = RFut::Item, Error = HyperError> + 'a,
+    F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
   {
     let make_future = Arc::new(make_future);
     SharedMethodFilters {
@@ -155,11 +160,12 @@ impl<F> SharedMethodFilters<F> {
     builder: &mut RouterBuilder<'a, Request, RFut, FFut, EH>,
     method: Method,
   ) -> FilterHandle
-  where RFut: Future<Item=Response, Error=E> + 'a,
-        FFut: Future<Item=(), Error=Rejection<Response, E>> + 'a,
-        EH: ErrorHandler<'a, E> + 'a,
-        EH::Future: Future<Item=RFut::Item, Error=HyperError> + 'a,
-        F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
+  where
+    RFut: Future<Item = Response, Error = E> + 'a,
+    FFut: Future<Item = (), Error = Rejection<Response, E>> + 'a,
+    EH: ErrorHandler<'a, E> + 'a,
+    EH::Future: Future<Item = RFut::Item, Error = HyperError> + 'a,
+    F: Fn(Result<(), Rejection<Response, E>>) -> FFut + Send + Sync + 'a,
   {
     builder.new_filter(MethodFilter::new(self.make_future.clone(), method))
   }

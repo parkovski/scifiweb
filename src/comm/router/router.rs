@@ -4,7 +4,7 @@ use futures::future::{self, Future, Loop};
 use route_recognizer::Router as Recognizer;
 use url::Url;
 use util::IntoBox;
-use super::builder::{RouteEntry, FilterEntry, ErrorHandler};
+use super::builder::{ErrorHandler, FilterEntry, RouteEntry};
 use super::handlers::{Params, Rejection};
 
 pub trait RoutePath {
@@ -42,10 +42,11 @@ impl<Rq: RoutePath> GetRoutePath<Rq> for UnsavedRoutePath {
 }
 
 pub struct Router<'a, Rq, RFut, FFut, EH>
-  where RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
   recognizer: Recognizer<u32>,
   routes: Arc<Vec<RouteEntry<'a, Rq, RFut>>>,
@@ -54,19 +55,19 @@ pub struct Router<'a, Rq, RFut, FFut, EH>
 }
 
 impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
-  where Rq: 'a,
-        RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  Rq: 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
-  pub(in super) fn new(
+  pub(super) fn new(
     recognizer: Recognizer<u32>,
     routes: Arc<Vec<RouteEntry<'a, Rq, RFut>>>,
     filters: Arc<Vec<FilterEntry<'a, Rq, RFut::Item, RFut::Error, FFut>>>,
-    error_handler: EH
-  ) -> Self
-  {
+    error_handler: EH,
+  ) -> Self {
     Router {
       recognizer,
       routes,
@@ -80,14 +81,13 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
     index: u32,
     req: Rq,
     path: &str,
-    mut params: Params
-  ) -> Box<Future<Item=RFut::Item, Error=<EH::Future as Future>::Error> + 'a>
-  {
+    mut params: Params,
+  ) -> Box<Future<Item = RFut::Item, Error = <EH::Future as Future>::Error> + 'a> {
     let route = &self.routes[index as usize];
     let num_filters = route.filter_indexes.len();
     let error_handler = self.error_handler.clone();
     let mut ext = HashMap::new();
-    
+
     // Add all the query parameters to params, beginning with a "?".
     // (ex. /foo?first=hello&second=goodbye => ?first: hello, ?second: goodbye)
     if let Ok(url) = Url::parse(path) {
@@ -98,7 +98,8 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
     }
 
     if num_filters == 0 {
-      route.handler
+      route
+        .handler
         .call(req, &params, &mut ext)
         .or_else(move |err| error_handler.on_error(err))
         .into_box()
@@ -118,7 +119,7 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
             .call(req, params, ext)
         }
             .then(move |result| match result {
-              // forward params to the route handler
+// forward params to the route handler
               Ok(()) => Ok(if index < max_index {
                   Loop::Continue((index + 1, route_params))
                 } else {
@@ -126,7 +127,9 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
                 }),
               Err(e) => Err((e, route_params)),
             })
-      }).then(move |result| -> Box<Future<Item=RFut::Item, Error=<EH::Future as Future>::Error> + 'a> {
+      }).then(move |result|
+        -> Box<Future<Item=RFut::Item, Error=<EH::Future as Future>::Error> + 'a>
+      {
         match result {
           Err((Rejection::Response(res), _))
             => future::ok(res).into_box(),
@@ -147,9 +150,11 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
     }
   }
 
-  pub fn run_for_path(&self, path: &str, req: Rq)
-  -> Box<Future<Item=RFut::Item, Error=<EH::Future as Future>::Error> + 'a>
-  {
+  pub fn run_for_path(
+    &self,
+    path: &str,
+    req: Rq,
+  ) -> Box<Future<Item = RFut::Item, Error = <EH::Future as Future>::Error> + 'a> {
     let match_ = match self.recognizer.recognize(path) {
       Ok(m) => m,
       Err(_) => return self.error_handler.on_not_found(path).into_box(),
@@ -160,13 +165,17 @@ impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
 }
 
 impl<'a, Rq, RFut, FFut, EH> Router<'a, Rq, RFut, FFut, EH>
-  where Rq: RoutePath + 'a,
-        RFut: Future + 'a,
-        FFut: Future<Item=(), Error=Rejection<RFut::Item, RFut::Error>> + 'a,
-        EH: ErrorHandler<'a, RFut::Error> + 'a,
-        EH::Future: Future<Item=RFut::Item> + 'a,
+where
+  Rq: RoutePath + 'a,
+  RFut: Future + 'a,
+  FFut: Future<Item = (), Error = Rejection<RFut::Item, RFut::Error>> + 'a,
+  EH: ErrorHandler<'a, RFut::Error> + 'a,
+  EH::Future: Future<Item = RFut::Item> + 'a,
 {
-  pub fn run(&self, req: Rq) -> Box<Future<Item=RFut::Item, Error=<EH::Future as Future>::Error> + 'a> {
+  pub fn run(
+    &self,
+    req: Rq,
+  ) -> Box<Future<Item = RFut::Item, Error = <EH::Future as Future>::Error> + 'a> {
     let match_ = match self.recognizer.recognize(req.route_path()) {
       Ok(m) => m,
       Err(_) => return self.error_handler.on_not_found(req.route_path()).into_box(),

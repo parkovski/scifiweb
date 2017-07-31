@@ -29,9 +29,16 @@ impl<'a> RedemptionList<'a> {
   }
 
   pub fn add(&'a mut self, redemption: Redemption<'a>) {
-    match self.redemptions.entry(unsafe { &*redemption.redeemable_kind }) {
-      Entry::Occupied(mut e) => { e.get_mut().push(redemption); }
-      Entry::Vacant(e) => { e.insert(vec![redemption]); }
+    match self
+      .redemptions
+      .entry(unsafe { &*redemption.redeemable_kind })
+    {
+      Entry::Occupied(mut e) => {
+        e.get_mut().push(redemption);
+      }
+      Entry::Vacant(e) => {
+        e.insert(vec![redemption]);
+      }
     }
   }
 }
