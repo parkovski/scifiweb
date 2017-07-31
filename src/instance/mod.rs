@@ -31,11 +31,11 @@ impl Target {
 
 impl fmt::Display for Target {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      &Target::Global => write!(f, "Global"),
-      &Target::ProfileId(id) => write!(f, "Profile {}", id),
-      &Target::GroupId(id) => write!(f, "Group {}", id),
-      &Target::GroupType(ref ty) => write!(f, "Group type {}", ty.name()),
+    match *self {
+      Target::Global => write!(f, "Global"),
+      Target::ProfileId(id) => write!(f, "Profile {}", id),
+      Target::GroupId(id) => write!(f, "Group {}", id),
+      Target::GroupType(ref ty) => write!(f, "Group type {}", ty.name()),
     }
   }
 }
@@ -49,11 +49,11 @@ impl FromStr for Target {
       match &s[0..split] {
         "pid" => s[split + 1..]
           .parse::<u64>()
-          .map(|id| Target::ProfileId(id))
+          .map(Target::ProfileId)
           .map_err(|_| Self::format_error()),
         "gid" => s[split + 1..]
           .parse::<u64>()
-          .map(|id| Target::GroupId(id))
+          .map(Target::GroupId)
           .map_err(|_| Self::format_error()),
         "gty" => Ok(Target::GroupType(
           rules::GroupType::new(s[split + 1..].to_owned()),

@@ -20,7 +20,7 @@ impl JsonConvertError {
     JsonConvertError { description }
   }
 
-  pub fn not_found(kind: &'static str, name: &String) -> Self {
+  pub fn not_found(kind: &'static str, name: &str) -> Self {
     JsonConvertError {
       description: format!("{} {} not found", kind, name),
     }
@@ -32,7 +32,7 @@ impl JsonConvertError {
     }
   }
 
-  pub fn duplicate(kind: &'static str, name: &String) -> Self {
+  pub fn duplicate(kind: &'static str, name: &str) -> Self {
     JsonConvertError {
       description: format!("duplicate {} found: {}", kind, name),
     }
@@ -127,8 +127,7 @@ impl<'a> JsonToGraphConverter<'a> {
         collectable_list.push(collectable::Collectable::new(json_collectable.0.clone()));
         let collectable_ptr = {
           let index = collectable_list.len() - 1;
-          let ptr = collectable_list.get_mut(index).unwrap() as *mut _;
-          ptr
+          &mut collectable_list[index] as *mut _
         };
         collectable_map.insert(
           json_collectable.0,
@@ -140,7 +139,7 @@ impl<'a> JsonToGraphConverter<'a> {
         );
       }
     }
-    for collectable in self.collectable_map.iter() {
+    for collectable in &self.collectable_map {
       self
         .add_redemptions_and_upgrades((collectable.1).0, &(collectable.1).1, &(collectable.1).2)?;
     }
@@ -150,14 +149,14 @@ impl<'a> JsonToGraphConverter<'a> {
   fn add_redemptions_and_upgrades<'b>(
     &'b self,
     collectable: *mut collectable::Collectable<'a>,
-    redemptions: &'b Vec<json::Redemption>,
-    upgrades: &'b Vec<json::Upgrade>,
+    redemptions: &'b [json::Redemption],
+    upgrades: &'b [json::Upgrade],
   ) -> Result<(), JsonConvertError> {
     let collectable_map = &self.collectable_map;
     let event_map = self.event_map.as_ref().unwrap();
     for r in redemptions.iter() {
-      match r {
-        &json::Redemption::Event {
+      match *r {
+        json::Redemption::Event {
           amount,
           cost_event: ref cost_event_name,
         } => if let Some(cost_event) = event_map.get(cost_event_name) {
@@ -165,7 +164,7 @@ impl<'a> JsonToGraphConverter<'a> {
         } else {
           return Err(JsonConvertError::not_found("event", cost_event_name));
         },
-        &json::Redemption::Collectable {
+        json::Redemption::Collectable {
           amount,
           cost_collectable: ref cost_collectable_name,
           cost_amount,
@@ -223,11 +222,11 @@ impl<'a> JsonToGraphConverter<'a> {
     json_event_target: &json::EventTarget,
     group_type_map: &HashMap<String, group::GroupType>,
   ) -> Result<event::EventTarget, JsonConvertError> {
-    match json_event_target {
-      &json::EventTarget::Global => Ok(event::EventTarget::Global),
-      &json::EventTarget::Profile => Ok(event::EventTarget::Profile),
-      &json::EventTarget::GroupType(None) => Ok(event::EventTarget::Group),
-      &json::EventTarget::GroupType(Some(ref group_type_name)) => {
+    match *json_event_target {
+      json::EventTarget::Global => Ok(event::EventTarget::Global),
+      json::EventTarget::Profile => Ok(event::EventTarget::Profile),
+      json::EventTarget::GroupType(None) => Ok(event::EventTarget::Group),
+      json::EventTarget::GroupType(Some(ref group_type_name)) => {
         if let Some(group_type) = group_type_map.get(group_type_name) {
           Ok(event::EventTarget::GroupType(group_type as *const _))
         } else {

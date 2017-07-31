@@ -50,6 +50,8 @@ where
 {
   recognizer: Recognizer<u32>,
   routes: Arc<Vec<RouteEntry<'a, Rq, RFut>>>,
+  // Sorry clippy, this is hard to simplify.
+  #[allow(type_complexity)]
   filters: Arc<Vec<FilterEntry<'a, Rq, RFut::Item, RFut::Error, FFut>>>,
   error_handler: Arc<EH>,
 }
@@ -62,6 +64,7 @@ where
   EH: ErrorHandler<'a, RFut::Error> + 'a,
   EH::Future: Future<Item = RFut::Item> + 'a,
 {
+  #[allow(type_complexity)]
   pub(super) fn new(
     recognizer: Recognizer<u32>,
     routes: Arc<Vec<RouteEntry<'a, Rq, RFut>>>,
@@ -91,7 +94,7 @@ where
     // Add all the query parameters to params, beginning with a "?".
     // (ex. /foo?first=hello&second=goodbye => ?first: hello, ?second: goodbye)
     if let Ok(url) = Url::parse(path) {
-      for (k, v) in url.query_pairs().into_iter() {
+      for (k, v) in url.query_pairs() {
         let k = String::from("?") + &k;
         params.insert(k, v.into_owned());
       }

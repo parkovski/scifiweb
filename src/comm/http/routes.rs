@@ -35,7 +35,7 @@ fn response(content_type: ContentType, body: &str) -> Response {
     .with_body(body.to_owned())
 }
 
-fn response_ok<'a>(body: &str) -> RouteFuture {
+fn response_ok(body: &str) -> RouteFuture {
   Ok(response(ContentType::plaintext(), body)).pipe(SFFuture::new)
 }
 

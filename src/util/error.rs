@@ -18,10 +18,10 @@ impl fmt::Display for JsonError {
 
 impl Error for JsonError {
   fn description(&self) -> &str {
-    match self {
-      &JsonError::Serde(ref e) => e.description(),
-      &JsonError::Io(ref e) => e.description(),
-      &JsonError::Deserialize(ref s) => s.as_str(),
+    match *self {
+      JsonError::Serde(ref e) => e.description(),
+      JsonError::Io(ref e) => e.description(),
+      JsonError::Deserialize(ref s) => s.as_str(),
     }
   }
 }

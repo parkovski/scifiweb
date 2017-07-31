@@ -52,21 +52,21 @@ impl Error for ParamError {
 pub trait GetAny<K> {
   type Error;
 
-  fn get_any<'a, V: 'static>(&'a self, key: K) -> Result<&'a V, Self::Error>;
-  fn get_any_mut<'a, V: 'static>(&'a mut self, key: K) -> Result<&'a mut V, Self::Error>;
+  fn get_any<V: 'static>(&self, key: K) -> Result<&V, Self::Error>;
+  fn get_any_mut<V: 'static>(&mut self, key: K) -> Result<&mut V, Self::Error>;
 }
 
 impl<'s> GetAny<&'s str> for HashMap<String, Box<Any>> {
   type Error = ParamError;
 
-  fn get_any<'a, V: 'static>(&'a self, key: &'s str) -> Result<&'a V, ParamError> {
+  fn get_any<V: 'static>(&self, key: &'s str) -> Result<&V, ParamError> {
     self
       .get(key)
       .and_then(|any| any.downcast_ref())
       .ok_or_else(|| ParamError::not_found("Extension param", key))
   }
 
-  fn get_any_mut<'a, V: 'static>(&'a mut self, key: &'s str) -> Result<&'a mut V, ParamError> {
+  fn get_any_mut<V: 'static>(&mut self, key: &'s str) -> Result<&mut V, ParamError> {
     self
       .get_mut(key)
       .and_then(|any| any.downcast_mut())

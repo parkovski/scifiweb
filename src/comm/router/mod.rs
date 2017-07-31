@@ -1,6 +1,7 @@
 pub mod builder;
 mod handlers;
 pub mod hyper;
+#[allow(module_inception)]
 mod router;
 
 pub use self::handlers::{ExtMap, GetAny, GetParam, ParamError, Params, Rejection};

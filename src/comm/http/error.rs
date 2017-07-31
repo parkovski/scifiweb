@@ -15,18 +15,18 @@ pub enum Error {
 
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      &Error::Mailbox(ref mberr) => mberr.fmt(f),
-      &Error::Param(ref pnferr) => pnferr.fmt(f),
+    match *self {
+      Error::Mailbox(ref mberr) => mberr.fmt(f),
+      Error::Param(ref pnferr) => pnferr.fmt(f),
     }
   }
 }
 
 impl StdError for Error {
   fn description(&self) -> &str {
-    match self {
-      &Error::Mailbox(ref mberr) => mberr.description(),
-      &Error::Param(ref pnferr) => pnferr.description(),
+    match *self {
+      Error::Mailbox(ref mberr) => mberr.description(),
+      Error::Param(ref pnferr) => pnferr.description(),
     }
   }
 }

@@ -71,7 +71,7 @@ where
       Ok(guard) => Ok(guard),
     };
 
-    let result = self.read_fn.take().unwrap()(lock_result).map(|item| Async::Ready(item));
+    let result = self.read_fn.take().unwrap()(lock_result).map(Async::Ready);
     if let Some(task) = self.data.write_waiters.try_pop() {
       task.notify();
     } else if let Some(task) = self.data.read_waiters.try_pop() {
@@ -109,7 +109,7 @@ where
       Ok(guard) => Ok(guard),
     };
 
-    let result = self.write_fn.take().unwrap()(lock_result).map(|item| Async::Ready(item));
+    let result = self.write_fn.take().unwrap()(lock_result).map(Async::Ready);
     if let Some(task) = self.data.read_waiters.try_pop() {
       task.notify();
       while let Some(task) = self.data.read_waiters.try_pop() {

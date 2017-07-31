@@ -3,6 +3,7 @@
 #![feature(conservative_impl_trait)]
 #![cfg_attr(feature = "lint", feature(plugin))]
 #![cfg_attr(feature = "lint", plugin(clippy))]
+#![cfg_attr(not(feature = "lint"), allow(unknown_lints))]
 
 extern crate core;
 extern crate hyper;

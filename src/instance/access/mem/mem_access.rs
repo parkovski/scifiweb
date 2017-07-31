@@ -181,13 +181,13 @@ impl<'a> MessageThreadAccessor<'a> for Arc<MemoryAccessor> {
           .partition::<Vec<_>, _>(|&(ref t, _id)| t.is_some());
         if missing_is_error {
           let not_found_ids = not_found.into_iter().fold(String::new(), |mut acc, pair| {
-            if acc.len() > 0 {
+            if !acc.is_empty() {
               acc += ", "
             }
             acc += pair.1.to_string().as_str();
             acc
           });
-          if not_found_ids.len() > 0 {
+          if !not_found_ids.is_empty() {
             return Err(MailboxError::not_found("thread ids", not_found_ids));
           }
         }

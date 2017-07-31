@@ -105,19 +105,21 @@ impl FromStr for MessageLimit {
   type Err = FormatError;
 
   fn from_str(s: &str) -> Result<Self, FormatError> {
-    if s == "none" {
-      Ok(MessageLimit::None)
-    } else if {
+    let is_seconds = {
       let b = s.as_bytes();
       b[b.len() - 1] == b's'
-    } {
+    };
+
+    if s == "none" {
+      Ok(MessageLimit::None)
+    } else if is_seconds {
       s[0..s.len() - 1]
         .parse::<u64>()
         .map(|secs| MessageLimit::Duration(Duration::new(secs, 0)))
         .map_err(|_| Self::format_error())
     } else {
       s.parse::<u32>()
-        .map(|count| MessageLimit::Count(count))
+        .map(MessageLimit::Count)
         .map_err(|_| Self::format_error())
     }
   }
@@ -171,7 +173,7 @@ impl Mailbox {
     self.thread_limit
   }
 
-  pub fn thread_ids<'b>(&'b self) -> &[u64] {
+  pub fn thread_ids(&self) -> &[u64] {
     self.thread_ids.as_ref()
   }
 

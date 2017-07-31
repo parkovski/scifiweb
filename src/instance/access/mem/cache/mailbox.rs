@@ -69,7 +69,7 @@ impl MailboxCache {
         .values()
         .map(|v| self.mailboxes.get(v))
         .filter_map(|option_mailbox| option_mailbox)
-        .map(|mailbox_ref| mailbox_ref.clone());
+        .cloned();
       if values.any(|_| true) {
         Some(values.collect())
       } else {

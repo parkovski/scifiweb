@@ -222,7 +222,7 @@ where
   /// Join two paths, converting either zero or
   /// two slashes to one at the join point.
   fn join_path(&self, subpath: &str) -> String {
-    if subpath.len() == 0 {
+    if subpath.is_empty() {
       return self.base_path.clone();
     }
     let end_slash = self.base_path.ends_with('/');
@@ -234,6 +234,9 @@ where
     }
   }
 
+  // Clippy thinks this is a type conversion, but the 'to' here
+  // is more like a 'return to'.
+  #[allow(wrong_self_convention)]
   pub fn to_root(self) -> RouterBuilder<'a, Rq, RFut, FFut, EH> {
     *self.router_builder.expect(ONLY_ACCESSIBLE_BUILDER_HAS_REF)
   }
