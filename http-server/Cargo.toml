@@ -1,0 +1,12 @@
+[package]
+name = "sf-http-server"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+hyper = "0.11.1"
+futures = "0.1.14"
+log = "0.3.8"
+sf-model = {path = "../model"}
+sf-router = {path = "../router", features=["hyper-router"]}
+sf-util = {path = "../util"}

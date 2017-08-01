@@ -1,0 +1,11 @@
+[package]
+name = "sf-ws-server"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+# Which of these to use?
+#ws =
+#tungstenite =
+#websocket =
+log = "0.3.8"

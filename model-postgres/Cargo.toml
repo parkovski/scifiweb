@@ -1,0 +1,9 @@
+[package]
+name = "sf-model-postgres"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+#tokio-postgres = {version = , optional = true}
+#r2d2 = {version = , optional = true}
+log = "0.3.8"

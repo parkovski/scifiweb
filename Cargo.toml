@@ -3,45 +3,36 @@ name = "scifiweb"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
+[[bin]]
+path = "main/main.rs"
+name = "scifiweb"
+
 [dependencies]
-hyper = "0.11.1"
-#hyper-tls = "0.1.2"
-ws = "0.7.3"
+log = "0.3.8"
+#sf-ws-server = {path = "ws-server"}
 serde = "*"
 serde_json = "1.0"
 serde_derive = "1.0"
-either = "1.1.0"
-futures = "0.1.14"
-#futures-cpupool = "0.1.15"
+#futures-cpupool =
 ctrlc = {version = "3.0", features = ["termination"]}
-route-recognizer = "0.1.12"
-url = "1.5.1"
-log = "0.3.8"
-termcolor = "0.3.2"
-atomic = "0.3.4"
-crossbeam = "0.2.10"
 docopt = "0.8.1"
 error-chain = "0.10.0"
-clippy = {version = "*", optional = true}
-fnv = "1.0.5"
-#frank_jwt =
-#crypto =
-#tokio-redis = {git = "https://github.com/tokio-rs/tokio-redis", optional = true}
-#redis-async = # see how this one develops
-#tokio-postgres = {version = , optional = true}
-#r2d2 = {version = , optional = true}
-#tungstenite = # is this abandoned?
-#websocket = # which of these three to use?
-#oauth2 =
 #rand =
 #rayon =
 #threadpool =
 #chrono =
 #itertools =
 #toml?
+sf-model = {path = "model"}
+sf-model-mem = {path = "model-mem"}
+sf-model-postgres = {path = "model-postgres", optional = true}
+sf-model-redis = {path = "model-redis", optional = true}
+sf-http-server = {path = "http-server"}
+sf-util = {path = "util"}
 
 [features]
-default = [] #postgres, redis
-lint = ["clippy"]
-#postgres = ["tokio-postgres", "r2d2"]
-#redis = ["tokio-redis", "r2d2"]
+#default = ["postgres", "redis"]
+postgres = ["sf-model-postgres"]
+redis = ["sf-model-redis"]
+
+[workspace]

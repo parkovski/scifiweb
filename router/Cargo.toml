@@ -1,0 +1,15 @@
+[package]
+name = "sf-router"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+hyper = {version = "0.11.1", optional = true}
+futures = "0.1.14"
+route-recognizer = "0.1.12"
+url = "1.5.1"
+log = "0.3.8"
+sf-util = {path = "../util"}
+
+[features]
+hyper-router = ["hyper"]

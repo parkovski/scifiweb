@@ -1,0 +1,10 @@
+[package]
+name = "sf-model-redis"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+#tokio-redis = {git = "https://github.com/tokio-rs/tokio-redis", optional = true}
+#redis-async = # see how this one develops
+#r2d2 =
+log = "0.3.8"

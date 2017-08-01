@@ -1,0 +1,10 @@
+[package]
+name = "sf-auth"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+#frank_jwt =
+#crypto =
+#oauth2 =
+log = "0.3.8"

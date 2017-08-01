@@ -1,0 +1,10 @@
+[package]
+name = "sf-util"
+version = "0.1.0"
+authors = ["Parker Snell <parkersnell@gmail.com>"]
+
+[dependencies]
+crossbeam = "0.2.10"
+futures = "0.1.14"
+log = "0.3.8"
+termcolor = "0.3.2"
