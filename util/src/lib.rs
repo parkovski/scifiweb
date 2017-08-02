@@ -8,6 +8,7 @@ extern crate termcolor;
 
 pub mod future;
 pub mod logger;
+pub mod split_vec;
 pub mod sync;
 
 pub fn id<T>(t: T) -> T {
