@@ -3,7 +3,7 @@ use hyper::header::{ContentLength, ContentType};
 use futures::Future;
 use sf_router::{builder, ExtMap, GetAny, GetParam, Params};
 use sf_router::hyper_router::{CommonMethods, SharedMethodFilters};
-use sf_model::access::Accessor;
+use sf_model::access::ClonableAccessor;
 use sf_model::instance::Target;
 use sf_model::instance::messaging::MessageLimit;
 use sf_util::future::SFFuture;
@@ -39,7 +39,7 @@ fn response_ok(body: &str) -> RouteFuture {
   Ok(response(ContentType::plaintext(), body)).pipe(SFFuture::new)
 }
 
-pub fn setup_routes<A: Accessor<'static> + 'static>(accessor: A) -> Router {
+pub fn setup_routes<A: ClonableAccessor<'static> + 'static>(accessor: A) -> Router {
   let mut builder = RouterBuilder::new(ErrorHandler);
   let methods = SharedMethodFilters::new(&mut builder, |result| result.pipe(SFFuture::new));
 
@@ -54,7 +54,7 @@ pub fn setup_routes<A: Accessor<'static> + 'static>(accessor: A) -> Router {
 }
 
 /// /messaging/*
-fn setup_mailbox_routes<P, A: Accessor<'static> + 'static>(
+fn setup_mailbox_routes<P, A: ClonableAccessor<'static> + 'static>(
   builder: DirBuilder<P>,
   methods: &CommonMethods,
 ) -> RouterBuilder {

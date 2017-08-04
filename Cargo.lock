@@ -469,6 +469,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sf-auth"
+version = "0.1.0"
+dependencies = [
+ "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sf-http-server"
 version = "0.1.0"
 dependencies = [
@@ -490,6 +497,7 @@ dependencies = [
  "serde 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sf-auth 0.1.0",
  "sf-util 0.1.0",
 ]
 

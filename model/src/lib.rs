@@ -7,8 +7,60 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate log;
 extern crate sf_util;
 
 pub mod access;
 pub mod instance;
 pub mod rules;
+
+pub mod event;
+
+/// How long does the entity expect to
+/// need to exist? These correlate with
+/// whether it should be kept in cache
+/// or moved to the database.
+pub enum StoragePreference {
+  /// Default - no hint.
+  Unknown,
+  /// The entity is too short-lived or
+  /// unimportant to be placed in storage.
+  NotStored,
+  /// Lifetime measured in seconds.
+  ShortTerm,
+  /// Lifetime measured in minutes.
+  MediumTerm,
+  /// Lifetime from hours to permanent.
+  LongTerm,
+  /// Lots of frequent reads/writes/creates/deletes.
+  HeavyTraffic,
+}
+
+/// IDs start at 1 - 0 represents an invalid or missing ID.
+pub const ENTITY_INVALID_ID: u64 = 0;
+
+/// All storable entities must be uniquely identifiable
+/// by their type tag and ID.
+pub trait Entity {
+  /// This string must be unique to each type,
+  /// and may not change once in use.
+  const TYPE_TAG: &'static str;
+
+  /// Which type of storage does the entity prefer?
+  const STORAGE_PREFERENCE: StoragePreference = StoragePreference::Unknown;
+
+  /// The ID must be unique within each type.
+  fn id(&self) -> u64;
+}
+
+/// Add all entities to the event registries.
+/// This must be done on startup, and the registry
+/// will panic at runtime without them.
+/// TODO: Create a script/build step/compiler plugin
+/// that checks this.
+pub fn initialize() {
+  event::registry::EventListenerRegistry::initialize();
+  event::registry::EventTriggerRegistry::initialize();
+  trace!("Event registries initialized");
+}

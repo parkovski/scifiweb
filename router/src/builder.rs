@@ -5,12 +5,12 @@ use super::router::Router;
 pub use super::handlers::{ErrorHandler, Filter, Route};
 use super::Rejection;
 
-pub(super) struct RouteEntry<'a, Rq, Fut: Future + 'a> {
+pub(crate) struct RouteEntry<'a, Rq, Fut: Future + 'a> {
   pub handler: Box<Route<'a, Rq, Future = Fut> + 'a>,
   pub filter_indexes: Arc<Vec<u32>>,
 }
 
-pub(super) struct FilterEntry<'a, Rq, Rs, E, Fut>
+pub(crate) struct FilterEntry<'a, Rq, Rs, E, Fut>
 where
   Fut: Future<Item = (), Error = Rejection<Rs, E>> + 'a,
 {
@@ -61,10 +61,7 @@ where
   EH: ErrorHandler<'a, RFut::Error> + 'a,
   EH::Future: Future<Item = RFut::Item> + 'a,
 {
-  fn into_filter_handle(
-    self,
-    _builder: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>,
-  ) -> FilterHandle {
+  fn into_filter_handle(self, _: &mut RouterBuilder<'a, Rq, RFut, FFut, EH>) -> FilterHandle {
     self
   }
 }
@@ -280,7 +277,7 @@ where
         let filter_handle = handler.into_filter_handle(router_builder);
         add_index_unique(&mut self.filter_indexes, filter_handle.id());
       }
-      _ => unreachable!(),
+      _ => unreachable!(ONLY_ACCESSIBLE_BUILDER_HAS_REF),
     }
     self
   }

@@ -9,7 +9,7 @@ extern crate sf_util;
 use std::sync::Arc;
 use hyper::{Request, Response};
 use hyper::server::Http;
-use sf_model::access::Accessor;
+use sf_model::access::ClonableAccessor;
 use sf_router::Rejection;
 use sf_router::hyper_router::HyperRouter;
 use sf_util::future::SFFuture;
@@ -23,7 +23,7 @@ pub type RouteFuture = SFFuture<'static, Response, error::Error>;
 pub type FilterFuture = SFFuture<'static, (), Rejection<Response, error::Error>>;
 pub type Router = sf_router::Router<'static, Request, RouteFuture, FilterFuture, ErrorHandler>;
 
-pub fn start<A: Accessor<'static> + 'static>(addr: &str, accessor: A) -> hyper::Result<()> {
+pub fn start<A: ClonableAccessor<'static> + 'static>(addr: &str, accessor: A) -> hyper::Result<()> {
   let router = Arc::new(HyperRouter::new(setup_routes(accessor)));
   let server = Http::new()
     .bind(&addr.parse().unwrap(), move || Ok(router.clone()))?;

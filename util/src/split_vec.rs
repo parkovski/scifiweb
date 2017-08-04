@@ -25,6 +25,15 @@ impl<T> SplitVec<T> {
     SplitVec { vec: Vec::with_capacity(capacity), split_index: 0 }
   }
 
+  pub fn left_from_vec(vec: Vec<T>) -> Self {
+    let len = vec.len();
+    SplitVec { vec, split_index: len }
+  }
+
+  pub fn right_from_vec(vec: Vec<T>) -> Self {
+    SplitVec { vec, split_index: 0 }
+  }
+
   pub fn push_left(&mut self, item: T) {
     let len = self.vec.len();
     self.vec.push(item);
