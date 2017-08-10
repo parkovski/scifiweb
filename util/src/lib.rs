@@ -11,6 +11,9 @@ pub mod logger;
 pub mod split_vec;
 pub mod sync;
 
+use futures::Future;
+use future::SFFuture;
+
 pub fn id<T>(t: T) -> T {
   t
 }
@@ -35,13 +38,19 @@ impl<S, T, F: FnOnce(Self) -> T> Pipe<T, F> for S {
 /// works but with futures you end up having
 /// to wrap big expression chains in extra
 /// parenthesis.
-pub trait IntoBox<'a, T: 'a>: Sized + 'a {
+pub trait IntoBox<'a, T: 'a + ?Sized>: Sized + 'a {
   fn into_box(self) -> Box<T>;
 }
 
 impl<'a, T: 'a> IntoBox<'a, T> for Box<T> {
   fn into_box(self) -> Box<T> {
     self
+  }
+}
+
+impl<'a, T: 'a, E: 'a> IntoBox<'a, Future<Item = T, Error = E> + 'a> for SFFuture<'a, T, E> {
+  fn into_box(self) -> Box<Future<Item = T, Error = E> + 'a> {
+    self.into_inner()
   }
 }
 

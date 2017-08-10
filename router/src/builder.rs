@@ -81,18 +81,6 @@ where
   last_route_index: Option<u32>,
 }
 
-/// If this list is shared between routes, we need to
-/// make this one unique to add a route to it.
-fn add_index_unique(vec: &mut Arc<Vec<u32>>, index: u32) {
-  if let Some(indexes) = Arc::get_mut(vec) {
-    indexes.push(index);
-    return;
-  }
-  let mut new_vec = Vec::clone(vec);
-  new_vec.push(index);
-  *vec = Arc::new(new_vec);
-}
-
 impl<'a, Rq, RFut, FFut, EH> RouterBuilder<'a, Rq, RFut, FFut, EH>
 where
   Rq: 'a,
@@ -127,10 +115,7 @@ where
   }
 
   fn add_filter_to_route(&mut self, route_index: u32, filter_index: u32) {
-    add_index_unique(
-      &mut self.routes[route_index as usize].filter_indexes,
-      filter_index,
-    );
+    Arc::make_mut(&mut self.routes[route_index as usize].filter_indexes).push(filter_index);
   }
 
   pub fn route<R>(mut self, path: &str, handler: R) -> Self
@@ -161,7 +146,7 @@ where
     let filter_handle = handler.into_filter_handle(&mut self);
     match self.last_route_index {
       Some(route) => self.add_filter_to_route(route, filter_handle.id()),
-      None => add_index_unique(&mut self.global_filters, filter_handle.id()),
+      None => Arc::make_mut(&mut self.global_filters).push(filter_handle.id()),
     }
     self
   }
@@ -275,7 +260,7 @@ where
       }
       (None, Some(router_builder)) => {
         let filter_handle = handler.into_filter_handle(router_builder);
-        add_index_unique(&mut self.filter_indexes, filter_handle.id());
+        Arc::make_mut(&mut self.filter_indexes).push(filter_handle.id());
       }
       _ => unreachable!(ONLY_ACCESSIBLE_BUILDER_HAS_REF),
     }

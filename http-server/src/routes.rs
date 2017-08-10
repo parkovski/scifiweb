@@ -42,13 +42,15 @@ fn response_ok(body: &str) -> RouteFuture {
 pub fn setup_routes<A: ClonableAccessor<'static> + 'static>(accessor: A) -> Router {
   let mut builder = RouterBuilder::new(ErrorHandler);
   let methods = SharedMethodFilters::new(&mut builder, |result| result.pipe(SFFuture::new));
+  let common_methods = methods.common_methods();
 
   builder = builder.with_filter(move |_: &_, _: &_, ext: &mut ExtMap| -> FilterFuture {
     ext.insert("accessor".to_owned(), Box::new(accessor.clone()));
     Ok(()).pipe(SFFuture::new)
   });
 
-  builder = setup_mailbox_routes::<_, A>(builder.dir("/messaging"), methods.common_methods());
+  builder = setup_mailbox_routes::<_, A>(builder.dir("/messaging"), common_methods);
+  builder = setup_event_routes::<_, A>(builder.dir("/event"), common_methods);
 
   builder.build()
 }
@@ -57,7 +59,8 @@ pub fn setup_routes<A: ClonableAccessor<'static> + 'static>(accessor: A) -> Rout
 fn setup_mailbox_routes<P, A: ClonableAccessor<'static> + 'static>(
   builder: DirBuilder<P>,
   methods: &CommonMethods,
-) -> RouterBuilder {
+) -> RouterBuilder
+{
   builder
     .dir("/mailbox")
       .route("/new", |_, params: &Params, ext: &mut ExtMap| -> RouteFuture {
@@ -116,6 +119,22 @@ fn setup_mailbox_routes<P, A: ClonableAccessor<'static> + 'static>(
           .and_then(|message| response_ok(format!("created message {}", message.id()).as_str()))
           .pipe(SFFuture::new)
       })
+
+    .to_root()
+}
+
+/// /event/*
+fn setup_event_routes<P, A: ClonableAccessor<'static> + 'static>(
+  builder: DirBuilder<P>,
+  methods: &CommonMethods,
+) -> RouterBuilder
+{
+  builder
+    .route("/new/:template", |_, params: &Params, _: &mut _| -> RouteFuture {
+      let template = params.get_str_param("template").unwrap();
+      response_ok(format!("making event from template {}", template).as_str())
+    })
+    .with_filter(methods.post())
 
     .to_root()
 }

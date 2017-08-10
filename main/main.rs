@@ -23,6 +23,7 @@ use sf_model::rules::config::{read_json_rules, JsonToGraphConverter};
 use sf_model_mem::MemoryAccessor;
 
 fn main() {
+  sf_model::initialize();
   let _ = sf_util::logger::init();
 
   let config =

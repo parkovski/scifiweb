@@ -2,7 +2,9 @@ use std::sync::{Once, ONCE_INIT};
 use std::collections::HashMap;
 use sf_util::future::SFFuture;
 use access::Accessor;
-use super::EventFuture;
+use super::{EventFuture, EventListener};
+use super::trigger::*;
+use ::Entity;
 
 // There is no synchronization around these because
 // they are initialized before any threads are started
@@ -16,7 +18,7 @@ static mut TRIGGER_REGISTRY: EventTriggerRegistry = EventTriggerRegistry {
   map: 0 as *const _,
 };
 
-type ListenerMap = HashMap<&'static str, fn(&Accessor<'static>, u64) -> EventFuture<'static, ()>>;
+type ListenerMap = HashMap<&'static str, fn(&Accessor<'static>, u64) -> Box<EventListener>>;
 pub struct EventListenerRegistry {
   map: *const ListenerMap,
 }
@@ -29,31 +31,45 @@ impl EventListenerRegistry {
       let mut map = HashMap::new();
       Self::fill_map(&mut map);
       unsafe {
-        // This technically leaks, but it is supposed to last
-        // the duration of the program anyway, and won't be
-        // changed after startup.
+        // Probably better to just leak this - it needs to be
+        // around for the duration of the program, and while
+        // it's easy to make sure it's initialized before any
+        // multithreaded access, it's harder to be sure no
+        // thread accesses invalid memory after this is freed.
         LISTENER_REGISTRY.map = Box::into_raw(Box::new(map));
       }
     });
   }
 
-  pub fn get(type_tag: &'static str) -> fn(&Accessor<'static>, u64) -> EventFuture<'static, ()> {
-    fn foo(a: &Accessor<'static>, b: u64) -> EventFuture<'static, ()> {
-      SFFuture::new(Ok(()))
+  pub fn try_get(type_tag: &'static str)
+    -> Option<fn(&Accessor<'static>, u64) -> Box<EventListener>>
+  {
+    unsafe {
+      *(*LISTENER_REGISTRY.map)
+        .get(type_tag)
     }
-    foo
+  }
+
+  #[cfg(debug_assertions)]
+  pub fn get(type_tag: &'static str) -> fn(&Accessor<'static>, u64) -> Box<EventListener> {
+    Self::try_get(type_tag)
+      .expect("All event listeners must be added to the registry on startup")
+  }
+
+  #[cfg(not(debug_assertions))]
+  pub fn get(type_tag: &'static str) -> fn(&Accessor<'static>, u64) -> Box<EventListener> {
+    Self::try_get(type_tag)
+      .ok_or_else(|| InvalidEventTrigger::new(
+        format!("EventListenerRegistry has no entry for '{}'", type_tag)
+      ))
   }
 
   fn fill_map(map: &mut ListenerMap) {
 
   }
-
-  fn error(_: &Accessor<'static>, _: u64) -> EventFuture<'static, ()> {
-    SFFuture::new(Ok(()))
-  }
 }
 
-type TriggerMap = HashMap<&'static str, fn(&Accessor<'static>, u64) -> EventFuture<'static, bool>>;
+type TriggerMap = HashMap<&'static str, fn(u64, &str) -> Box<EventTrigger>>;
 pub struct EventTriggerRegistry {
   map: *const TriggerMap,
 }
@@ -71,18 +87,40 @@ impl EventTriggerRegistry {
     });
   }
 
-  pub fn get(type_tag: &'static str) -> fn(&Accessor<'static>, u64) -> EventFuture<'static, bool> {
-    fn foo(a: &Accessor<'static>, b: u64) -> EventFuture<'static, bool> {
-      SFFuture::new(Ok(true))
+  pub fn try_get(type_tag: &'static str) -> Option<fn(u64, &str) -> Box<EventTrigger>> {
+    unsafe {
+      *(*TRIGGER_REGISTRY.map)
+        .get(type_tag)
     }
-    foo
+  }
+
+  #[cfg(debug_assertions)]
+  pub fn get(type_tag: &'static str) -> fn(&str) -> Box<EventTrigger> {
+    Self::try_get(type_tag)
+      .expect("All event triggers must be added to the registry on startup")
+  }
+
+  #[cfg(not(debug_assertions))]
+  pub fn get(type_tag: &'static str) -> fn(&str) -> Box<EventTrigger> {
+    Self::try_get(type_tag)
+      .ok_or_else(|| InvalidEventTrigger::new(
+        format!("EventTriggerRegistry has no entry for '{}'", type_tag)
+      ))
   }
 
   fn fill_map(map: &mut TriggerMap) {
+    fn insert<T: EventTrigger + Entity>(map: &mut TriggerMap) {
+      map.insert(<T as Entity>::TYPE_TAG, <T as EventTrigger>::restore);
+    }
 
-  }
-
-  fn error(_: &Accessor<'static>, _: u64) -> EventFuture<'static, bool> {
-    SFFuture::new(Ok(true))
+    insert::<AutomaticEventTrigger>(map);
+    insert::<UserEventTrigger>(map);
+    insert::<AuthorizedGroupEventTrigger>(map);
+    insert::<TimerEventTrigger>(map);
+    insert::<CostEventTrigger>(map);
+    insert::<SequenceEventTrigger>(map);
+    insert::<SetEventTrigger>(map);
+    insert::<RepeatEventTrigger>(map);
+    insert::<LinkedEventTrigger>(map);
   }
 }

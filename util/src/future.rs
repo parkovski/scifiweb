@@ -15,6 +15,18 @@ impl<'a, Item, Error> SFFuture<'a, Item, Error> {
       inner: f.into_future().into_box(),
     }
   }
+
+  pub fn ok(item: Item) -> Self where Item: Send + 'a, Error: Send + 'a {
+    Self::new(Ok(item))
+  }
+
+  pub fn err(error: Error) -> Self where Item: Send + 'a, Error: Send + 'a {
+    Self::new(Err(error))
+  }
+
+  pub fn into_inner(self) -> Box<Future<Item = Item, Error = Error> + 'a> {
+    self.inner
+  }
 }
 
 impl<'a, Item, Error> Future for SFFuture<'a, Item, Error> {
