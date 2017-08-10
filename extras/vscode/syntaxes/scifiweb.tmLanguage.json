@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "comment": "SciFiWeb Grammar",
+  "fileTypes": [
+    "scifi"
+  ],
+  "keyEquivalent": "^~S",
+  "name": "SciFiWeb",
+  "scopeName": "scifiweb",
+  "patterns": [
+    {
+      "match": "(?<![\\w\\d.])\\d+(?!\\.)%?",
+      "name": "constant.numeric.integer.scifiweb"
+    },
+    {
+      "match": "(?<![\\w\\d.])\\d+(\\.\\d+)%?",
+      "name": "constant.numeric.float.scifiweb"
+    },
+    {
+      "match": "(?<![\\w\\d_])[\\w_][\\w\\d_]*:",
+      "name": "support.function.label.scifiweb"
+    },
+    {
+      "begin": "'",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.scifiweb"
+        }
+      },
+      "end": "'",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.scifiweb"
+        }
+      },
+      "name": "string.quoted.single.scifiweb",
+      "patterns": [
+        {
+          "include": "#escaped_char"
+        }
+      ]
+    },
+    {
+      "name": "comment.line.double-slash.cs",
+      "begin": "#",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.cs"
+        }
+      },
+      "end": "(?=$)"
+    },
+    {
+      "match": "\\b(switch|text|localized|gameserver|admin|datetime|gameresult)\\b",
+      "name": "keyword.type.scifiweb"
+    },
+    {
+      "match": "\\b(random|user|group|collectable|event|map)\\b",
+      "name": "keyword.control.scifiweb"
+    },
+    {
+      "match": "\\b(on|off|seconds|minutes|hours|days|weeks|months)\\b",
+      "name": "constant.language.scifiweb"
+    },
+    {
+      "match": "\\b(amount|cost|currency|weighted|distribution|range|min|max|x)\\b",
+      "name": "keyword.numeric.scifiweb"
+    },
+    {
+      "match": "\\b(property|permission|type|tag|upgrades|redemptions)\\b",
+      "name": "keyword.object.type.scifiweb"
+    },
+    {
+      "match": "\\b(params|assert|authorize|award|timer|set|find|notify|option)\\b",
+      "name": "keyword.command.scifiweb"
+    },
+    {
+      "match": "\\b(include|in|with|of|to|for|similar|has|and|or)\\b",
+      "name": "keyword.other.scifiweb"
+    },
+    {
+      "match": "\\+|-|\\*|\\/|\\^|=|>=?|<=?|!=?|%",
+      "name": "keyword.operator.scifiweb"
+    }
+  ],
+  "repository": {
+    "escaped_char": {
+      "patterns": [
+        {
+          "match": "''",
+          "name": "constant.character.escape.scifiweb"
+        }
+      ]
+    }
+  },
+  "uuid": "57BF4DB8-3375-4FB3-8385-EE3CBC2EF444"
+}

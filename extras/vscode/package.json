@@ -1,0 +1,32 @@
+{
+  "name": "scifiweb-vscode-grammar",
+  "version": "1.0.0",
+  "publisher": "parkovski",
+  "engines": {
+    "vscode": "^1.14.0"
+  },
+  "description": "",
+  "author": "parkovski",
+  "license": "ISC",
+  "displayName": "SciFiWeb Language",
+  "categories": [
+    "Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "extensions": [ ".scifi" ],
+        "aliases": [ "SciFiWeb" ],
+        "id": "scifiweb",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "path": "./syntaxes/scifiweb.tmLanguage.json",
+        "language": "scifiweb",
+        "scopeName": "scifiweb"
+      }
+    ]
+  }
+}
