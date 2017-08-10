@@ -1,0 +1,77 @@
+Collectables need custom properties that can be set by events.
+Property types:
+- switch (on/off)
+- text
+- localized text
+- integer
+- decimal
+- percent
+- random
+  - weighted or evenly distributed
+  - group distribution: random or grouped
+- datetime
+- collectable
+- user
+- group
+
+In Clash Royale, winning a game runs this sequence:
+- The winner is awarded a number of trophies roughly corresponding
+  to their level. The loser subtracts a similar amount.
+- The winner is awarded a treasure chest from a weighted random
+  up to 4.
+- When a user selects a treasure chest, a timer starts or a gem cost is paid.
+  When either of those conditions is satisfied, the chest is deleted
+  and the user is awarded a set of cards from a weighted random distribution
+  over common, rare, etc.
+
+An example program:
+event WinGame:
+  params(winner user in players, loser user in players);
+  # Fails if the event is not called by the game server.
+  authorize gameserver;
+
+  # award <collectable> (x <amount>) to <user(s)> -
+  # the event request specifies the named variables winner and loser.
+  # random(name) runs the predefined random called 'name'.
+  # <name> for <collectable> looks up in a predefined map based
+  # on the amount of the collectable.
+  # 'award to user' notifies user of the change in value of the collectable.
+  # 'chest' is a weighted random.
+  award 'trophies' x random('trophies' for winner.trophies) to winner;
+  award 'coins' x 'coins' for winner.trophies to winner;
+  award random('chest') to winner;
+  award -'trophies' x random('trophies' for loser.trophies) to loser;
+
+event OpenChest:
+  params(player user in players, chest collectable with tag 'chest');
+  # this event must be called by the owner of the chest.
+  authorize user chest.owner;
+  # the timer starts on creation, but when one trigger in
+  # an option group is satisfied, all of them are deleted.
+  option(
+    timer chest.time,
+    cost gems x chest.gems
+  );
+  # each of these is a random group distribution that will return
+  # a random set of groups, for example 10x arrows + 3x knight,
+  # rather than just 13 random cards.
+  award random(chest.commonCards) to player;
+  award random(chest.rareCards) to player;
+  award random(chest.epicCards) to player;
+  award random(chest.legendaryCards) to player;
+  award coins x chest.coins to player;
+
+event Start2v2Game:
+  set players = find user x 4 with waitingFor2v2 = on with similar trophies;
+  set server = find gameserver with accepting = on;
+  notify server 'Start2v2Game' with players;
+
+Syntax:
+  params(<id> <type>
+    in <group type>
+    | with type <collectable type>
+    | with tag <tag list>
+    | with property <property list>
+    | with amount of <collectable> (comparison operator) <expression>
+    | (comparison operator) <expression>
+  )

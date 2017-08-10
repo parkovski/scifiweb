@@ -29,6 +29,7 @@ sf-model-postgres = {path = "model-postgres", optional = true}
 sf-model-redis = {path = "model-redis", optional = true}
 sf-http-server = {path = "http-server"}
 sf-util = {path = "util"}
+sf-vm = {path = "vm"}
 
 [features]
 #default = ["postgres", "redis"]

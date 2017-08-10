@@ -1,0 +1,137 @@
+include 'commonCards.scifi';
+include 'rareCards.scifi';
+
+Player: user;
+  has collectable Level with amount range 1 to 10;
+  has collectable Coin;
+  has collectable Gem;
+  # Note: chests are not marked as 'has amount'.
+  # This just means that multiple chests will not
+  # be grouped together as one item, but you can
+  # still set an amount range here.
+  has collectable group Chest with amount max 4;
+
+Level: collectable;
+  has amount;
+  has upgrades with cost [
+    Coin x 100 * 2 ^ (amount - 1) for amount max 4,
+    Coin x 1500 * (amount - 4) for amount min 5 max 8,
+    Coin x 15000 for amount 9,
+  ];
+
+Coin: collectable;
+  has amount;
+  has redemptions with amount [
+    100 for cost Gem x 10,
+    500 for cost Gem x 45,
+    1000 for cost Gem x 80,
+  ];
+
+CoinRewards: map;
+  amount of collectable Coin
+  for collectable Level = 10 + 2 * amount;
+
+Foobar: map;
+  property test of collectable Foo
+  for collectable Bar
+  with [
+    'Hello' for amount 1,
+    'Goodbye' for amount 2,
+  ]
+  or = 'I don''t know';
+
+Gem: collectable;
+  # These redemptions are defined by an adapter
+  # that looks up the cost in the store the user
+  # is logged in to.
+  has redemptions for currency;
+
+Chest: collectable group;
+  property waitingToOpen switch = off;
+  has collectable [
+    SmallChest:
+      has redemptions with amount 1 for cost Gem x 100;
+    LargeChest:
+      has redemptions with amount 1 for cost Gem x 500;
+  ];
+
+OpenSmallChest: event;
+  params(chest collectable SmallChest);
+  authorize user chest.owner;
+  assert !chest.waitingToOpen;
+  set chest.waitingToOpen = on;
+  option(
+    set t = timer 3 hours;
+  ) or (
+    cost Gem x 10 * t.timeRemaining in hours;
+  );
+  award random SmallChestRewards to chest.owner;
+  award -chest;
+
+OpenLargeChest: event;
+  params(chest collectable LargeChest);
+  authorize user chest.owner;
+  assert !chest.waitingToOpen;
+  set chest.waitingToOpen = on;
+  option(
+    set t = timer 8 hours;
+  ) or (
+    cost Gem x 10 * t.timeRemaining in hours;
+  );
+  award random LargeChestRewards to chest.owner;
+  award -chest;
+
+SmallChestRewards: random;
+  group distribution min 2 max 4;
+  amount random range 10 to 15;
+  weighted for collectable group [
+    90% for CommonCards,
+    8% for RareCards,
+    1.5% for EpicCards,
+    0.5% for LegendaryCards,
+  ];
+
+LargeChestRewards: random;
+  group distribution min 4 max 7;
+  amount random range 30 to 35;
+  weighted for collectable group [
+    50% for CommonCards,
+    35% for RareCards,
+    13% for EpicCards,
+    2% for LegendaryCards,
+  ];
+
+WinnerChest: random;
+  amount 1;
+  weighted for collectable [
+    70% for SmallChest,
+    30% for LargeChest,
+  ];
+
+PlayerWantsGame: event;
+  params(player user Player);
+  authorize user;
+  # TODO: How to model these to avoid race conditions?
+  option(
+    set p2 = find user Player with similar amount of collectable Level;
+    set server = find gameserver with switch accepting = on;
+    notify server of StartGame with [player, p2];
+  ) or (
+    timer 5 seconds;
+    set server = find gameserver with switch accepting = on;
+    notify server of StartComputerPlayerGame with player;
+  );
+
+StartGame: event for gameserver;
+  params(p1 user Player, p2 user Player);
+
+StartComputerPlayerGame: event for gameserver;
+  params(player user Player);
+
+EndGame: event;
+  params(game gameresult);
+  authorize gameserver;
+  award random WinnerChest to game.winners;
+  award map CoinRewards to game.winners;
+  award collectable Level x 1 to game.winners;
+  award -collectable Level x 1 to game.losers;
