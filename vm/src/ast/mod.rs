@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 use std::ops::Deref;
 use std::mem;
 
-pub struct ItemRef<C: Deref + Clone> {
+pub enum ItemRef<C: Deref + Clone> {
   /// A concrete item reference.
   Resolved(C),
   /// A not-yet-defined item reference by name.
@@ -12,21 +12,42 @@ pub struct ItemRef<C: Deref + Clone> {
 }
 
 impl<C: Deref + Clone> ItemRef<C> {
-  fn unwrap(&self) -> C {
+  pub fn unwrap(&self) -> C {
     match *self {
       ItemRef::Resolved(ref container) => container.clone(),
       _ => panic!("Called ItemRef::unwrap() on unresolved value"),
     }
   }
 
-  fn unwrap_invalid(&self) -> &str {
+  pub fn unwrap_invalid(&self) -> &str {
     match *self {
       ItemRef::Invalid(ref s) => s,
       _ => panic!("Called ItemRef::unwrap_invalid() on non-invalid value"),
     }
   }
 
-  fn resolve<F>(&mut self, resolver: F) -> bool
+  pub fn is_resolved(&self) -> bool {
+    match *self {
+      ItemRef::Resolved(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_placeholder(&self) -> bool {
+    match *self {
+      ItemRef::Placeholder(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_invalid(&self) -> bool {
+    match *self {
+      ItemRef::Invalid(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn resolve<F>(&mut self, resolver: F) -> bool
   where
     F: FnOnce(&str) -> Option<C>
   {
@@ -35,10 +56,22 @@ impl<C: Deref + Clone> ItemRef<C> {
         Some(resolved) => (ItemRef::Resolved(resolved), true),
         None => (ItemRef::Invalid(mem::replace(name, String::new())), false),
       }
+    } else {
+      return self.is_resolved();
     };
     *self = new_val;
     success
   }
+}
+
+pub struct Ast {
+  pub includes: Vec<Include>,
+  pub items: Vec<Box<TopLevelItem>>,
+}
+
+pub struct ItemVisitor;
+pub trait TopLevelItem {
+  fn visit(&self, visitor: &mut ItemVisitor);
 }
 
 pub struct Include {
@@ -51,13 +84,15 @@ pub struct User {
   pub properties: Vec<Variable>,
 }
 
-pub enum CollectableRef {
-  Single(ItemRef<Arc<Collectable>>),
-  Group(ItemRef<Arc<CollectableGroup>>),
+/// A reference to an item that can be
+/// either single or part of a group.
+pub enum GrpRef<T, G> {
+  Single(ItemRef<Arc<T>>),
+  Group(ItemRef<Arc<G>>),
 }
 
 pub struct CollectableProperty {
-  pub item: CollectableRef,
+  pub item: GrpRef<Collectable, CollectableGroup>,
   pub amount: Range,
 }
 
@@ -80,7 +115,7 @@ pub struct Collectable {
 }
 
 pub struct Upgrade {
-  pub cost: CollectableRef,
+  pub cost: GrpRef<Collectable, CollectableGroup>,
   pub cost_amount: Expression,
   pub self_amount_range: Range,
 }
@@ -89,14 +124,14 @@ pub enum Redemption {
   ForCurrency,
   ForCollectable {
     self_amount: u32,
-    cost: CollectableRef,
+    cost: GrpRef<Collectable, CollectableGroup>,
     cost_amount: u32,
   }
 }
 
 pub enum VarRef {
   Amount,
-  ItemRef<Arc<Variable>>,
+  Var(ItemRef<Arc<Variable>>),
 }
 
 pub struct Variable {
@@ -202,12 +237,32 @@ pub struct RemoteEvent {
   pub params: Vec<EventParam>,
 }
 
+pub enum Type {
+  Switch,
+  Text { localized: bool },
+  GameServer,
+  Admin,
+  DateTime,
+  GameResult,
+  Random(ItemRef<Arc<Random>>),
+  User(ItemRef<Arc<User>>),
+  Collectable(ItemRef<Arc<Collectable>>),
+  CollectableGroup(ItemRef<Arc<CollectableGroup>>),
+  Event(ItemRef<Arc<Event>>),
+  Map(ItemRef<Arc<Map>>),
+}
+
+pub enum Constant {
+  Switch(bool),
+  Int(i32),
+  Float(f32),
+  Text(String),
+}
+
 pub enum Expression {
   Unary(UnaryExpression),
   Binary(BinaryExpression),
-  IntConstant(i32),
-  FloatConstant(f32),
-  StringConstant(String),
+  Constant(Constant),
   ReadVar(VarRef),
   ReadProperty(VarRef, String),
   Command(Box<Command>),
@@ -244,7 +299,7 @@ pub enum BinaryOp {
   NotEqual,
 }
 
-struct CommandVisitor;
+pub struct CommandVisitor;
 pub trait Command {
   fn visit(&self, visitor: &mut CommandVisitor);
 }

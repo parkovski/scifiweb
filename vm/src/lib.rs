@@ -6,5 +6,6 @@ extern crate lazy_static;
 extern crate log;
 extern crate fxhash;
 
-mod compile;
+pub mod ast;
+pub mod compile;
 pub use compile::compile_graph;
