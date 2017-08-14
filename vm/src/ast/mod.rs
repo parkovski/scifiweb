@@ -65,17 +65,39 @@ impl<C: Deref + Clone> ItemRef<C> {
 }
 
 pub struct Ast {
-  pub includes: Vec<Include>,
   pub items: Vec<Box<TopLevelItem>>,
 }
 
-pub struct ItemVisitor;
+impl Ast {
+  pub fn new(items: Vec<Box<TopLevelItem>>) -> Self {
+    Ast { items }
+  }
+}
+
+pub trait TopLevelVisitor {
+  fn visit_include(&mut self, include: &mut Include) -> Result<()> {
+    Ok(())
+  }
+}
+
 pub trait TopLevelItem {
-  fn visit(&self, visitor: &mut ItemVisitor);
+  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<()>;
 }
 
 pub struct Include {
   pub filename: String,
+}
+
+impl Include {
+  pub fn new(filename: String) -> Self {
+    Include { filename }
+  }
+}
+
+impl TopLevelItem for Include {
+  fn visit(&mut self, visitor: &mut TopLevelVisitor) {
+    visitor.visit_include(self)
+  }
 }
 
 pub struct User {
