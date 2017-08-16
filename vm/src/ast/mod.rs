@@ -75,13 +75,16 @@ impl Ast {
 }
 
 pub trait TopLevelVisitor {
-  fn visit_include(&mut self, include: &mut Include) -> Result<()> {
+  fn visit_include(&mut self, include: &mut Include) -> Result<(), ()> {
+    Ok(())
+  }
+  fn visit_user(&mut self, user: &mut User) -> Result<(), ()> {
     Ok(())
   }
 }
 
 pub trait TopLevelItem {
-  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<()>;
+  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()>;
 }
 
 pub struct Include {
@@ -95,7 +98,7 @@ impl Include {
 }
 
 impl TopLevelItem for Include {
-  fn visit(&mut self, visitor: &mut TopLevelVisitor) {
+  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()> {
     visitor.visit_include(self)
   }
 }
@@ -104,6 +107,22 @@ pub struct User {
   pub name: String,
   pub collectables: Vec<CollectableProperty>,
   pub properties: Vec<Variable>,
+}
+
+impl User {
+  pub fn new(name: String) -> Self {
+    User {
+      name,
+      collectables: Vec::new(),
+      properties: Vec::new(),
+    }
+  }
+}
+
+impl TopLevelItem for User {
+  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()> {
+    visitor.visit_user(self)
+  }
 }
 
 /// A reference to an item that can be

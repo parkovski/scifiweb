@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_imports)]
+#![recursion_limit = "1024"]
 
 #[macro_use]
 extern crate nom;
@@ -9,6 +10,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate fxhash;
+#[macro_use]
+extern crate error_chain;
 
 mod ast;
 mod compile;

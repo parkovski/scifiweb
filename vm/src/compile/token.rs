@@ -1,7 +1,9 @@
-use std::fmt;
+use std::str;
+use std::fmt::{self, Debug, Display};
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::ops::{Deref, DerefMut};
+use fxhash::FxHashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TokenSpan {
@@ -21,7 +23,7 @@ impl TokenSpan {
   }
 }
 
-impl fmt::Display for TokenSpan {
+impl Display for TokenSpan {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}: ({}, {})", &self.filename.display(), self.line, self.start)
   }
@@ -46,19 +48,19 @@ impl fmt::Display for Token {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-struct TokenValue<T: Debug + Clone + PartialEq + PartialOrd> {
+pub struct TokenValue<T: Display + Debug + Clone + PartialEq + PartialOrd> {
   pub value: T,
   pub kind: &'static str,
   pub span: TokenSpan,
 }
 
-impl<T: Debug + Clone + PartialEq + PartialOrd> TokenValue<T> {
+impl<T: Display + Debug + Clone + PartialEq + PartialOrd> TokenValue<T> {
   pub fn new(value: T, kind: &'static str, span: TokenSpan) -> Self {
     TokenValue { value, kind, span }
   }
 }
 
-impl<T: Display> TokenValue<T> {
+impl<T: Display + Debug + Clone + PartialEq + PartialOrd> TokenValue<T> {
   pub fn to_string_value(&self) -> TokenValue<String> {
     TokenValue {
       value: self.value.to_string(),
@@ -66,22 +68,34 @@ impl<T: Display> TokenValue<T> {
       span: self.span.clone(),
     }
   }
+
+  pub fn into_string_value(self) -> TokenValue<String> {
+    TokenValue {
+      value: self.value.to_string(),
+      kind: self.kind,
+      span: self.span,
+    }
+  }
+
+  pub fn into_inner(self) -> T {
+    self.value
+  }
 }
 
-impl<T> Deref for TokenValue<T> {
+impl<T: Display + Debug + Clone + PartialEq + PartialOrd> Deref for TokenValue<T> {
   type Target = T;
   fn deref(&self) -> &T {
     &self.value
   }
 }
 
-impl<T> DerefMut for TokenValue<T> {
+impl<T: Display + Debug + Clone + PartialEq + PartialOrd> DerefMut for TokenValue<T> {
   fn deref_mut(&mut self) -> &mut T {
     &mut self.value
   }
 }
 
-impl<T: Display> fmt::Display for TokenValue<T> {
+impl<T: Display + Debug + Clone + PartialEq + PartialOrd> fmt::Display for TokenValue<T> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{} at {}", &self.kind, &self.span)
   }
@@ -260,4 +274,18 @@ lazy_static! {
 
     map
   };
+}
+
+pub fn get_id_or_keyword(first: &[u8], rest: &[u8], colon: bool) -> TokenKind {
+  let mut id = str::from_utf8(first).unwrap().to_owned();
+  id.push_str(str::from_utf8(rest).unwrap());
+  if colon {
+    return TokenKind::Label(id);
+  }
+  let keyword = KEYWORDS.get(id.as_str());
+  if let Some(&k) = keyword {
+    TokenKind::Keyword(k)
+  } else {
+    TokenKind::Identifier(id)
+  }
 }
