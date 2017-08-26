@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse(filename: &Path) -> Result<Ast> {
-    let mut includes = Default::default();
+    let mut includes: FxHashSet<_> = Default::default();
     let filename = Arc::new(filename.canonicalize()?);
     includes.insert(filename.clone());
     Self::parse_file(filename, &mut includes)
