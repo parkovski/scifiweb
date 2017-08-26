@@ -1,0 +1,13 @@
+Card: collectable group;
+  has amount;
+  has collectable group [CommonCard, RareCard];
+
+CommonCard: collectable group;
+  has collectable [
+    Bomb, Bow, Sword
+  ];
+
+RareCard: collectable group;
+  has collectable [
+    FireBow, FreezeRay
+  ];

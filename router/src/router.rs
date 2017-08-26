@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use futures::future::{self, Future, Loop};
 use route_recognizer::Router as Recognizer;
 use url::Url;
-use sf_util::IntoBox;
+use util::IntoBox;
 use super::builder::{ErrorHandler, FilterEntry, RouteEntry};
 use super::handlers::{Params, Rejection};
 

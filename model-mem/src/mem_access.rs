@@ -2,11 +2,11 @@ use std::sync::Arc;
 use std::ops::Deref;
 use atomic::{Atomic, Ordering};
 use futures::Future;
-use sf_model::instance::Target;
-use sf_model::instance::messaging::*;
-use sf_model::access::messaging::*;
-use sf_util::IntoBox;
-use sf_util::sync::{FutureRwLock, Unpoisoned};
+use model::instance::Target;
+use model::instance::messaging::*;
+use model::access::messaging::*;
+use util::IntoBox;
+use util::sync::{FutureRwLock, Unpoisoned};
 use super::cache::*;
 
 pub struct MemoryAccessorInner {

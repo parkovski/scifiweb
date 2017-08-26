@@ -1,5 +1,5 @@
 [package]
-name = "sf-util"
+name = "scifi-util"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
@@ -8,3 +8,4 @@ crossbeam = "0.2.10"
 futures = "0.1.14"
 log = "0.3.8"
 termcolor = "0.3.2"
+fxhash = "0.2.1"

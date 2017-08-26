@@ -1,5 +1,7 @@
-use std::slice::{Iter, IterMut};
-use std::vec::IntoIter;
+use std::iter::FromIterator;
+use std::slice::Iter;
+use std::ops::Deref;
+use std::fmt::{self, Display, Debug};
 
 /// A `Vec` type that maintains a simple sorting order:
 /// items are either on the left or right. The order is
@@ -90,18 +92,6 @@ impl<T> SplitVec<T> {
     index >= self.split_index
   }
 
-  pub fn iter(&self) -> Iter<T> {
-    self.vec.iter()
-  }
-
-  pub fn iter_mut(&mut self) -> IterMut<T> {
-    self.vec.iter_mut()
-  }
-
-  pub fn into_iter(self) -> IntoIter<T> {
-    self.vec.into_iter()
-  }
-
   pub fn left_iter(&self) -> Iter<T> {
     let split_index = self.split_index;
     (&self.vec[0..split_index]).iter()
@@ -115,6 +105,18 @@ impl<T> SplitVec<T> {
   pub fn into_vec(self) -> Vec<T> {
     self.vec
   }
+
+  pub fn as_vec(&self) -> &Vec<T> {
+    &self.vec
+  }
+
+  pub fn left_len(&self) -> usize {
+    self.split_index
+  }
+
+  pub fn right_len(&self) -> usize {
+    self.len() - self.split_index
+  }
 }
 
 impl<T: Clone> Clone for SplitVec<T> {
@@ -123,6 +125,45 @@ impl<T: Clone> Clone for SplitVec<T> {
       vec: self.vec.clone(),
       split_index: self.split_index,
     }
+  }
+}
+
+impl<T> Deref for SplitVec<T> {
+  type Target = Vec<T>;
+  fn deref(&self) -> &Vec<T> {
+    &self.vec
+  }
+}
+
+impl<A> FromIterator<A> for SplitVec<A> {
+  fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = A> {
+    SplitVec { vec: FromIterator::from_iter(iter), split_index: 0 }
+  }
+}
+
+impl<T: Debug> Debug for SplitVec<T> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "[")?;
+    let len = self.vec.len();
+    let split = self.split_index;
+    for i in 0..len {
+      if i == split {
+        write!(f, " | ")?;
+      } else if i > 0 {
+        write!(f, ", ")?;
+      }
+      Debug::fmt(&self.vec[i], f)?;
+    }
+    if split == len {
+      write!(f, " | ")?;
+    }
+    write!(f, "]")
+  }
+}
+
+impl<T: Debug + Display> Display for SplitVec<T> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    Debug::fmt(self, f)
   }
 }
 

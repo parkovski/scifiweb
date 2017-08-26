@@ -7,7 +7,7 @@ use futures::stream::{Stream, futures_unordered};
 use super::Entity;
 use super::access::Accessor;
 use self::trigger::EventTrigger;
-use sf_util::future::SFFuture;
+use util::future::SFFuture;
 
 pub struct Error;
 
@@ -77,7 +77,7 @@ struct SerializedEvent {
 }
 
 impl Entity for SerializedEvent {
-  const TYPE_TAG: &'static str = "sf_model::event::SerializedEvent";
+  const TYPE_TAG: &'static str = "scifi_model::event::SerializedEvent";
 
   fn id(&self) -> u64 {
     self.id

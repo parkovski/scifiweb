@@ -1,6 +1,6 @@
 use std::time::Duration;
-use sf_util::split_vec::SplitVec;
-use sf_util::future::SFFuture;
+use util::split_vec::SplitVec;
+use util::future::SFFuture;
 //use super::collectable::Cost;
 use super::{Event, EventFuture, Error};
 use access::Accessor as EventAccessor;
@@ -47,7 +47,7 @@ impl InvalidEventTrigger {
 }
 
 impl Entity for InvalidEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::InvalidEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::InvalidEventTrigger";
 
   const STORAGE_PREFERENCE: StoragePreference = StoragePreference::NotStored;
 
@@ -80,7 +80,7 @@ impl AutomaticEventTrigger {
 }
 
 impl Entity for AutomaticEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::AutomaticEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::AutomaticEventTrigger";
 
   const STORAGE_PREFERENCE: StoragePreference = StoragePreference::NotStored;
 
@@ -118,7 +118,7 @@ impl UserEventTrigger {
 }
 
 impl Entity for UserEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::UserEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::UserEventTrigger";
 
   fn id(&self) -> u64 {
     self.entity_id
@@ -153,7 +153,7 @@ impl AuthorizedGroupEventTrigger {
 }
 
 impl Entity for AuthorizedGroupEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::AuthorizedGroupEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::AuthorizedGroupEventTrigger";
 
   fn id(&self) -> u64 {
     self.entity_id
@@ -187,7 +187,7 @@ impl TimerEventTrigger {
 }
 
 impl Entity for TimerEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::TimerEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::TimerEventTrigger";
 
   fn id(&self) -> u64 {
     ENTITY_INVALID_ID
@@ -221,7 +221,7 @@ impl CostEventTrigger {
 }
 
 impl Entity for CostEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::CostEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::CostEventTrigger";
 
   fn id(&self) -> u64 {
     self.id
@@ -256,7 +256,7 @@ impl SequenceEventTrigger {
 }
 
 impl Entity for SequenceEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::SequenceEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::SequenceEventTrigger";
 
   fn id(&self) -> u64 {
     self.id
@@ -292,7 +292,7 @@ impl SetEventTrigger {
 }
 
 impl Entity for SetEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::SetEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::SetEventTrigger";
 
   fn id(&self) -> u64 {
     self.id
@@ -322,7 +322,7 @@ pub struct OptionSetEventTrigger {
 impl OptionSetEventTrigger
 
 impl Entity for OptionSetEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::OptionSetEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::OptionSetEventTrigger";
 
   fn id(&self) -> u64 {
     ENTITY_INVALID_ID
@@ -344,7 +344,7 @@ impl RepeatEventTrigger {
 }
 
 impl Entity for RepeatEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::RepeatEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::RepeatEventTrigger";
 
   fn id(&self) -> u64 {
     self.id
@@ -378,7 +378,7 @@ impl LinkedEventTrigger {
 }
 
 impl Entity for LinkedEventTrigger {
-  const TYPE_TAG: &'static str = "sf_model::event::trigger::LinkedEventTrigger";
+  const TYPE_TAG: &'static str = "scifi_model::event::trigger::LinkedEventTrigger";
 
   fn id(&self) -> u64 {
     self.id

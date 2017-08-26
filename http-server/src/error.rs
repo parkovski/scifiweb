@@ -3,8 +3,8 @@ use std::error::Error as StdError;
 use hyper::{self, Response, StatusCode};
 use hyper::header::{ContentLength, ContentType};
 use futures::{future, Future};
-use sf_router::{builder, ParamError};
-use sf_model::instance::messaging::MessagingError;
+use router::{builder, ParamError};
+use model::instance::messaging::MessagingError;
 
 #[derive(Debug)]
 pub enum Error {

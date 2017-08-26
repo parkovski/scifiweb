@@ -10,7 +10,7 @@ extern crate serde_json;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
-extern crate sf_util;
+extern crate scifi_util as util;
 
 pub mod access;
 pub mod instance;

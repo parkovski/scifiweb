@@ -1,5 +1,5 @@
 [package]
-name = "sf-http-server"
+name = "scifi-http-server"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
@@ -7,6 +7,6 @@ authors = ["Parker Snell <parkersnell@gmail.com>"]
 hyper = "0.11.1"
 futures = "0.1.14"
 log = "0.3.8"
-sf-model = {path = "../model"}
-sf-router = {path = "../router", features=["hyper-router"]}
-sf-util = {path = "../util"}
+scifi-model = {path = "../model"}
+scifi-router = {path = "../router", features=["hyper"]}
+scifi-util = {path = "../util"}

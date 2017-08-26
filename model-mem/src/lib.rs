@@ -2,8 +2,8 @@ extern crate atomic;
 extern crate futures;
 #[macro_use]
 extern crate log;
-extern crate sf_model;
-extern crate sf_util;
+extern crate scifi_model as model;
+extern crate scifi_util as util;
 
 mod cache;
 //mod cache_access;

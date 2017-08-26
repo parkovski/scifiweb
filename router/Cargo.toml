@@ -1,5 +1,5 @@
 [package]
-name = "sf-router"
+name = "scifi-router"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
@@ -9,7 +9,4 @@ futures = "0.1.14"
 route-recognizer = "0.1.12"
 url = "1.5.1"
 log = "0.3.8"
-sf-util = {path = "../util"}
-
-[features]
-hyper-router = ["hyper"]
+scifi-util = {path = "../util"}

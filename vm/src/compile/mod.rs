@@ -1,8 +1,9 @@
 mod lexer;
-mod parser;
+mod parser_rd;
 mod token;
 
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use std::path::Path;
 
 /// In the lexer, tokens are not created until
 /// after the errors are.
@@ -51,25 +52,54 @@ mod parse_errors {
 
   use nom;
   use super::Placeholder;
-  use super::token::{Token, TokenSpan};
+  use super::token::TokenSpan;
 
   error_chain! {
     errors {
       UnclosedString(span: Placeholder<TokenSpan>) {
         description("unclosed string")
-        display("unclosed string at {}", &span)
+        display("unclosed string at {}", span)
       }
 
-      UnexpectedToken(token: Token) {
+      UnexpectedToken(token: String) {
         description("unexpected token")
-        display("unexpected token {}", &token)
+        display("unexpected token {}", token)
       }
+
+      Nom(span: TokenSpan) {
+        description("nom")
+        display("nom error at {}", span)
+      }
+
+      Expected(message: String) {
+        description("expected token not found")
+        display("{}", message)
+      }
+    }
+
+    foreign_links {
+      Io(::std::io::Error);
     }
   }
 
   impl ErrorKind {
     pub fn into_nom<I, O>(self) -> nom::IResult<I, O, Error> {
       nom::IResult::Error(nom::ErrorKind::Custom(self.into()))
+    }
+  }
+
+  impl Error {
+    pub fn into_nom<I, O>(self) -> nom::IResult<I, O, Error> {
+      nom::IResult::Error(nom::ErrorKind::Custom(self))
+    }
+
+    pub fn from_nom(nom_error: nom::ErrorKind<Error>, span: &TokenSpan) -> Self {
+      match nom_error {
+        nom::ErrorKind::Custom(e) => e,
+        // No sense matching anything since
+        // they're all turned into Fix.
+        _ => ErrorKind::Nom(span.clone()).into(),
+      }
     }
   }
 }
@@ -81,9 +111,6 @@ pub use self::parse_errors::{
   ResultExt as ParseResultExt,
 };
 
-pub fn compile_graph(program: &str) {
-  match parser::Parser::new(::std::path::PathBuf::new()).parse("include 'test';\nFoo:user;") {
-    ::nom::IResult::Done(..) => {println!("Ok!");}
-    _ => {println!("Nope!");}
-  }
+pub fn compile_graph(filename: &Path) -> ParseResult<::ast::Ast> {
+  parser_rd::Parser::parse(filename)
 }

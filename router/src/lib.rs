@@ -1,15 +1,15 @@
 #![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
 
 extern crate futures;
-#[cfg(feature = "hyper-router")]
+#[cfg(feature = "hyper")]
 extern crate hyper;
 extern crate route_recognizer;
 extern crate url;
-extern crate sf_util;
+extern crate scifi_util as util;
 
 pub mod builder;
 mod handlers;
-#[cfg(feature = "hyper-router")]
+#[cfg(feature = "hyper")]
 pub mod hyper_router;
 #[allow(module_inception)]
 mod router;

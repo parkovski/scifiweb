@@ -1,13 +1,13 @@
 use hyper::{Request, Response, StatusCode};
 use hyper::header::{ContentLength, ContentType};
 use futures::Future;
-use sf_router::{builder, ExtMap, GetAny, GetParam, Params};
-use sf_router::hyper_router::{CommonMethods, SharedMethodFilters};
-use sf_model::access::ClonableAccessor;
-use sf_model::instance::Target;
-use sf_model::instance::messaging::MessageLimit;
-use sf_util::future::SFFuture;
-use sf_util::Pipe;
+use router::{builder, ExtMap, GetAny, GetParam, Params};
+use router::hyper_router::{CommonMethods, SharedMethodFilters};
+use model::access::ClonableAccessor;
+use model::instance::Target;
+use model::instance::messaging::MessageLimit;
+use util::future::SFFuture;
+use util::Pipe;
 use super::{FilterFuture, RouteFuture, Router};
 use super::error::ErrorHandler;
 

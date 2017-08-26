@@ -1,5 +1,5 @@
 [package]
-name = "sf-model-postgres"
+name = "scifi-model-postgres"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 

@@ -1,5 +1,5 @@
 [package]
-name = "sf-ws-server"
+name = "scifi-ws-server"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 

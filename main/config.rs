@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::fs::File;
 use serde_json;
-use sf_model::rules::error::JsonError;
+use model::rules::error::JsonError;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]

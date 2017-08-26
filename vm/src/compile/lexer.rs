@@ -6,84 +6,91 @@ use super::parse_errors::*;
 
 macro_rules! lexfn {
   ($name:ident -> $ty:ty, $submac:ident!( $($args:tt)* )) => (
-    named!($name<&[u8], $ty, Error>,
-      fix_error!(Error, $submac!($($args)*))
-    );
+    #[allow(unused_variables)]
+    fn $name<'a>(i: &'a [u8]) -> IResult<&'a [u8], $ty, Error> {
+      match $submac!(i, $($args)*) {
+        IResult::Done(ii, o) => IResult::Done(ii, o),
+        IResult::Incomplete(n) => IResult::Incomplete(n),
+        IResult::Error(_) => IResult::Error(nom::ErrorKind::Fix),
+      }
+    }
   );
   (nofixerr: $name:ident -> $ty:ty, $submac:ident!( $($args:tt)* )) => (
-    named!($name<&[u8], $ty, Error>,
-      $submac!($($args)*)
-    );
+    #[allow(unused_variables)]
+    fn $name<'a>(i: &'a [u8]) -> IResult<&'a [u8], $ty, Error> {
+      $submac!(i, $($args)*)
+    }
   );
   (nofixerr($e:ty): $name:ident -> $ty:ty, $submac:ident!( $($args:tt)* )) => (
-    named!($name<&[u8], $ty, $e>,
-      $submac!($($args)*)
-    );
+    #[allow(unused_variables)]
+    fn $name<'a>(i: &'a [u8]) -> IResult<&'a [u8], $ty, $e> {
+      $submac!(i, $($args)*)
+    }
   );
 }
 
-lexfn!(op_semicolon -> TokenKind,
+lexfn!(op_semicolon -> TokenKind<'a>,
   do_parse!(tag!(";") >> (TokenKind::Semicolon))
 );
-lexfn!(op_dot -> TokenKind,
+lexfn!(op_dot -> TokenKind<'a>,
   do_parse!(tag!(".") >> (TokenKind::Dot))
 );
-lexfn!(op_comma -> TokenKind,
+lexfn!(op_comma -> TokenKind<'a>,
   do_parse!(tag!(",") >> (TokenKind::Comma))
 );
-lexfn!(op_lparen -> TokenKind,
+lexfn!(op_lparen -> TokenKind<'a>,
   do_parse!(tag!("(") >> (TokenKind::LParen))
 );
-lexfn!(op_rparen -> TokenKind,
+lexfn!(op_rparen -> TokenKind<'a>,
   do_parse!(tag!(")") >> (TokenKind::RParen))
 );
-lexfn!(op_lsquarebracket -> TokenKind,
+lexfn!(op_lsquarebracket -> TokenKind<'a>,
   do_parse!(tag!("[") >> (TokenKind::LSquareBracket))
 );
-lexfn!(op_rsquarebracket -> TokenKind,
+lexfn!(op_rsquarebracket -> TokenKind<'a>,
   do_parse!(tag!("]") >> (TokenKind::RSquareBracket))
 );
-lexfn!(op_minus -> TokenKind,
+lexfn!(op_minus -> TokenKind<'a>,
   do_parse!(tag!("-") >> (TokenKind::Minus))
 );
-lexfn!(op_plus -> TokenKind,
+lexfn!(op_plus -> TokenKind<'a>,
   do_parse!(tag!("+") >> (TokenKind::Plus))
 );
-lexfn!(op_multiply -> TokenKind,
+lexfn!(op_multiply -> TokenKind<'a>,
   do_parse!(tag!("*") >> (TokenKind::Multiply))
 );
-lexfn!(op_divide -> TokenKind,
+lexfn!(op_divide -> TokenKind<'a>,
   do_parse!(tag!("/") >> (TokenKind::Divide))
 );
-lexfn!(op_caret -> TokenKind,
+lexfn!(op_caret -> TokenKind<'a>,
   do_parse!(tag!("^") >> (TokenKind::Caret))
 );
-lexfn!(op_equal -> TokenKind,
+lexfn!(op_equal -> TokenKind<'a>,
   do_parse!(tag!("=") >> (TokenKind::Equal))
 );
-lexfn!(op_notequal -> TokenKind,
+lexfn!(op_notequal -> TokenKind<'a>,
   do_parse!(tag!("!=") >> (TokenKind::NotEqual))
 );
-lexfn!(op_less -> TokenKind,
+lexfn!(op_less -> TokenKind<'a>,
   do_parse!(tag!("<") >> (TokenKind::Less))
 );
-lexfn!(op_greater -> TokenKind,
+lexfn!(op_greater -> TokenKind<'a>,
   do_parse!(tag!(">") >> (TokenKind::Greater))
 );
-lexfn!(op_lessequal -> TokenKind,
+lexfn!(op_lessequal -> TokenKind<'a>,
   do_parse!(tag!("<=") >> (TokenKind::LessEqual))
 );
-lexfn!(op_greaterequal -> TokenKind,
+lexfn!(op_greaterequal -> TokenKind<'a>,
   do_parse!(tag!(">=") >> (TokenKind::GreaterEqual))
 );
-lexfn!(op_percentsign -> TokenKind,
+lexfn!(op_percentsign -> TokenKind<'a>,
   do_parse!(tag!("%") >> (TokenKind::PercentSign))
 );
-lexfn!(op_exclamation -> TokenKind,
+lexfn!(op_exclamation -> TokenKind<'a>,
   do_parse!(tag!("!") >> (TokenKind::Exclamation))
 );
 
-lexfn!(operator -> TokenKind,
+lexfn!(operator -> TokenKind<'a>,
   alt_complete!(
     op_semicolon
     | op_dot
@@ -122,52 +129,61 @@ fn is_identifier_char(ch: u8) -> bool {
   is_identifier_begin(ch) || is_integer(ch)
 }
 
-lexfn!(identifier -> TokenKind,
+lexfn!(identifier -> TokenKind<'a>,
   alt!(regular_identifier | escaped_identifier)
 );
 
-lexfn!(regular_identifier -> TokenKind,
+lexfn!(regular_identifier -> TokenKind<'a>,
   do_parse!(
-    first: verify!(take!(1), |c: &[u8]| is_identifier_begin(c[0])) >>
-    rest: take_while!(is_identifier_char) >>
+    chars: recognize!(
+      do_parse!(
+        verify!(take!(1), |c: &[u8]| is_identifier_begin(c[0])) >>
+        take_while!(is_identifier_char) >>
+        (())
+      )
+    ) >>
     colon: opt!(complete!(tag!(":"))) >>
-    (get_id_or_keyword(first, rest, colon.is_some()))
+    (get_id_or_keyword(chars, colon.is_some()))
   )
 );
 
-lexfn!(escaped_identifier -> TokenKind,
+lexfn!(escaped_identifier -> TokenKind<'a>,
   do_parse!(
     s: preceded!(tag!("`"), take_while1!(is_identifier_char)) >>
-    (TokenKind::Identifier(str::from_utf8(s).unwrap().to_owned()))
+    (TokenKind::Identifier(str::from_utf8(s).unwrap()))
   )
 );
 
-fn get_number(int: &[u8], dec: Option<&[u8]>, pct: Option<&[u8]>) -> TokenKind {
-  let is_percent = pct.is_some();
-  if let Some(dec) = dec {
-    let mut s = str::from_utf8(int).unwrap().to_owned();
-    s.push_str(str::from_utf8(dec).unwrap());
-    if is_percent {
-      TokenKind::Percentage(s.parse().unwrap())
-    } else {
-      TokenKind::Decimal(s.parse().unwrap())
-    }
+fn get_number<'a>(mut chars: &'a [u8]) -> TokenKind<'a> {
+  let is_pct = if chars[chars.len() - 1] == b'%' {
+    chars = &chars[0..chars.len() - 1];
+    true
   } else {
-    let s = str::from_utf8(int).unwrap();
-    if is_percent {
-      TokenKind::Percentage(s.parse().unwrap())
-    } else {
-      TokenKind::Integer(s.parse().unwrap())
-    }
+    false
+  };
+  let s = str::from_utf8(chars).unwrap();
+  let is_dec = s.find('.').is_some();
+
+  if is_pct {
+    TokenKind::Percentage(s.parse().unwrap())
+  } else if is_dec {
+    TokenKind::Decimal(s.parse().unwrap())
+  } else {
+    TokenKind::Integer(s.parse().unwrap())
   }
 }
 
-lexfn!(number -> TokenKind,
+lexfn!(number -> TokenKind<'a>,
   do_parse!(
-    int: take_while1!(is_integer) >>
-    dec: opt!(recognize!(preceded!(tag!("."), take_while1!(is_integer)))) >>
-    pct: opt!(complete!(tag!("%"))) >>
-    (get_number(int, dec, pct))
+    chars: recognize!(
+      do_parse!(
+        take_while1!(is_integer) >>
+        opt!(recognize!(preceded!(tag!("."), take_while1!(is_integer)))) >>
+        opt!(complete!(tag!("%"))) >>
+        (())
+      )
+    ) >>
+    (get_number(chars))
   )
 );
 
@@ -190,22 +206,22 @@ fn string_mid<'a>(inp: &'a [u8]) -> IResult<&'a [u8], &'a [u8], Error> {
   }
 }
 
-lexfn!(nofixerr(Error): string -> TokenKind,
+lexfn!(nofixerr(Error): string -> TokenKind<'a>,
   do_parse!(
     s: delimited!(
       fix_error!(Error, tag!("'")),
-      fold_many0!(
+      recognize!(fold_many0!(
         call!(string_mid),
-        String::new(),
-        |mut s: String, c| { s.push_str(str::from_utf8(c).unwrap()); s }
-      ),
+        (),
+        |_: (), _| {}
+      )),
       fix_error!(Error, tag!("'"))
     ) >>
-    (TokenKind::String(s))
+    (TokenKind::String(str::from_utf8(s).unwrap()))
   )
 );
 
-lexfn!(line_comment -> &[u8],
+lexfn!(line_comment -> &'a [u8],
   recognize!(do_parse!(
     char!('#') >> is_not!("\n") >> ()
   ))
@@ -232,7 +248,7 @@ lexfn!(nofixerr: whitespace -> (usize, usize),
   )
 );
 
-lexfn!(invalid -> TokenKind,
+lexfn!(invalid -> TokenKind<'a>,
   map!(take!(1), |b| TokenKind::Invalid(b[0].into()))
 );
 
@@ -245,7 +261,7 @@ where
 }
 
 /// Returns (ws lines, ws columns, token length, token kind).
-lexfn!(lex_one_token -> (usize, usize, usize, TokenKind),
+lexfn!(lex_one_token -> (usize, usize, usize, TokenKind<'a>),
   do_parse!(
     ws: whitespace >>
     start_len: call!(map, (<[u8]>::len)) >>
@@ -263,7 +279,7 @@ lexfn!(lex_one_token -> (usize, usize, usize, TokenKind),
 );
 
 pub fn next_token<'a>(inp: &'a [u8], last_token_span: &TokenSpan)
-  -> IResult<&'a [u8], Token, Error>
+  -> IResult<&'a [u8], Token<'a>, Error>
 {
   let result = lex_one_token(inp);
   match result {

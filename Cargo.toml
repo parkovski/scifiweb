@@ -9,7 +9,6 @@ name = "scifiweb"
 
 [dependencies]
 log = "0.3.8"
-#sf-ws-server = {path = "ws-server"}
 serde = "*"
 serde_json = "1.0"
 serde_derive = "1.0"
@@ -23,17 +22,18 @@ error-chain = "0.10.0"
 #chrono =
 #itertools =
 #toml?
-sf-model = {path = "model"}
-sf-model-mem = {path = "model-mem"}
-sf-model-postgres = {path = "model-postgres", optional = true}
-sf-model-redis = {path = "model-redis", optional = true}
-sf-http-server = {path = "http-server"}
-sf-util = {path = "util"}
-sf-vm = {path = "vm"}
+scifi-model = {path = "model"}
+scifi-model-mem = {path = "model-mem"}
+scifi-model-postgres = {path = "model-postgres", optional = true}
+scifi-model-redis = {path = "model-redis", optional = true}
+scifi-http-server = {path = "http-server"}
+#sf-ws-server = {path = "ws-server"}
+scifi-util = {path = "util"}
+scifi-vm = {path = "vm"}
 
 [features]
 #default = ["postgres", "redis"]
-postgres = ["sf-model-postgres"]
-redis = ["sf-model-redis"]
+postgres = ["scifi-model-postgres"]
+redis = ["scifi-model-redis"]
 
 [workspace]

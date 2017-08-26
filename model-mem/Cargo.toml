@@ -1,5 +1,5 @@
 [package]
-name = "sf-model-mem"
+name = "scifi-model-mem"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
@@ -8,5 +8,5 @@ atomic = "0.3.4"
 futures = "0.1.14"
 #fnv = "1.0.5"
 log = "0.3.8"
-sf-model = {path = "../model"}
-sf-util = {path = "../util"}
+scifi-model = {path = "../model"}
+scifi-util = {path = "../util"}

@@ -1,5 +1,5 @@
-include 'commonCards.scifi';
-include 'rareCards.scifi';
+#include 'commonCards.scifi';
+#include 'rareCards.scifi';
 
 Player: user;
   has collectable Level with amount range 1 to 10;

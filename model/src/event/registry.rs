@@ -1,6 +1,6 @@
 use std::sync::{Once, ONCE_INIT};
 use std::collections::HashMap;
-use sf_util::future::SFFuture;
+use util::future::SFFuture;
 use access::Accessor;
 use super::{EventFuture, EventListener};
 use super::trigger::*;

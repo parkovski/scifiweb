@@ -1,27 +1,26 @@
 use std::sync::{Arc, Weak};
-use std::ops::Deref;
 use std::mem;
 
-pub enum ItemRef<C: Deref + Clone> {
+pub enum ItemRef<T> {
   /// A concrete item reference.
-  Resolved(C),
+  Resolved(T),
   /// A not-yet-defined item reference by name.
   Placeholder(String),
   /// Tried to resolve the reference and failed.
   Invalid(String),
 }
 
-impl<C: Deref + Clone> ItemRef<C> {
-  pub fn unwrap(&self) -> C {
-    match *self {
-      ItemRef::Resolved(ref container) => container.clone(),
+impl<T> ItemRef<T> {
+  pub fn unwrap(self) -> T {
+    match self {
+      ItemRef::Resolved(container) => container,
       _ => panic!("Called ItemRef::unwrap() on unresolved value"),
     }
   }
 
-  pub fn unwrap_invalid(&self) -> &str {
-    match *self {
-      ItemRef::Invalid(ref s) => s,
+  pub fn unwrap_invalid(self) -> String {
+    match self {
+      ItemRef::Invalid(s) => s,
       _ => panic!("Called ItemRef::unwrap_invalid() on non-invalid value"),
     }
   }
@@ -49,7 +48,7 @@ impl<C: Deref + Clone> ItemRef<C> {
 
   pub fn resolve<F>(&mut self, resolver: F) -> bool
   where
-    F: FnOnce(&str) -> Option<C>
+    F: FnOnce(&str) -> Option<T>
   {
     let (new_val, success) = if let ItemRef::Placeholder(ref mut name) = *self {
       match resolver(name) {
@@ -65,41 +64,64 @@ impl<C: Deref + Clone> ItemRef<C> {
 }
 
 pub struct Ast {
-  pub items: Vec<Box<TopLevelItem>>,
+  pub users: Vec<Arc<User>>,
+  pub collectable_groups: Vec<Arc<CollectableGroup>>,
+  pub maps: Vec<Arc<Map>>,
+  pub events: Vec<Arc<Event>>,
+  pub randoms: Vec<Arc<Random>>,
 }
 
 impl Ast {
-  pub fn new(items: Vec<Box<TopLevelItem>>) -> Self {
-    Ast { items }
+  pub fn new() -> Self {
+    Ast {
+      users: Vec::new(),
+      collectable_groups: Vec::new(),
+      maps: Vec::new(),
+      events: Vec::new(),
+      randoms: Vec::new(),
+    }
+  }
+
+  pub fn merge(&mut self, other: Ast) {
+    self.users.extend(other.users);
+    self.collectable_groups.extend(other.collectable_groups);
+    self.maps.extend(other.maps);
+    self.events.extend(other.events);
+    self.randoms.extend(other.randoms);
   }
 }
 
-pub trait TopLevelVisitor {
-  fn visit_include(&mut self, include: &mut Include) -> Result<(), ()> {
-    Ok(())
-  }
-  fn visit_user(&mut self, user: &mut User) -> Result<(), ()> {
-    Ok(())
-  }
+pub trait AstAdd<T> {
+  fn add(&mut self, item: Arc<T>);
 }
 
-pub trait TopLevelItem {
-  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()>;
-}
-
-pub struct Include {
-  pub filename: String,
-}
-
-impl Include {
-  pub fn new(filename: String) -> Self {
-    Include { filename }
+impl AstAdd<User> for Ast {
+  fn add(&mut self, item: Arc<User>) {
+    self.users.push(item);
   }
 }
 
-impl TopLevelItem for Include {
-  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()> {
-    visitor.visit_include(self)
+impl AstAdd<CollectableGroup> for Ast {
+  fn add(&mut self, item: Arc<CollectableGroup>) {
+    self.collectable_groups.push(item);
+  }
+}
+
+impl AstAdd<Map> for Ast {
+  fn add(&mut self, item: Arc<Map>) {
+    self.maps.push(item);
+  }
+}
+
+impl AstAdd<Event> for Ast {
+  fn add(&mut self, item: Arc<Event>) {
+    self.events.push(item);
+  }
+}
+
+impl AstAdd<Random> for Ast {
+  fn add(&mut self, item: Arc<Random>) {
+    self.randoms.push(item);
   }
 }
 
@@ -116,12 +138,6 @@ impl User {
       collectables: Vec::new(),
       properties: Vec::new(),
     }
-  }
-}
-
-impl TopLevelItem for User {
-  fn visit(&mut self, visitor: &mut TopLevelVisitor) -> Result<(), ()> {
-    visitor.visit_user(self)
   }
 }
 
@@ -144,15 +160,50 @@ pub struct CollectableProperty {
 pub struct CollectableGroup {
   pub name: String,
   pub has_amount: bool,
-  pub properties: Vec<Variable>,
-  pub collectables: Vec<Collectable>,
+  pub properties: Vec<Arc<Variable>>,
+  // TODO: subgroups
+  pub collectables: Vec<Arc<Collectable>>,
+}
+
+impl CollectableGroup {
+  pub fn new(name: String) -> Self {
+    CollectableGroup {
+      name,
+      has_amount: false,
+      properties: Vec::new(),
+      collectables: Vec::new(),
+    }
+  }
+}
+
+impl AstAdd<Variable> for CollectableGroup {
+  fn add(&mut self, item: Arc<Variable>) {
+    self.properties.push(item);
+  }
+}
+
+impl AstAdd<Collectable> for CollectableGroup {
+  fn add(&mut self, item: Arc<Collectable>) {
+    self.collectables.push(item);
+  }
 }
 
 pub struct Collectable {
   pub name: String,
-  pub group: Weak<CollectableGroup>,
+  pub group: ItemRef<Weak<CollectableGroup>>,
   pub upgrades: Vec<Upgrade>,
   pub redemptions: Vec<Redemption>,
+}
+
+impl Collectable {
+  pub fn new(name: String, group: String) -> Self {
+    Collectable {
+      name,
+      group: ItemRef::Placeholder(group),
+      upgrades: Vec::new(),
+      redemptions: Vec::new(),
+    }
+  }
 }
 
 pub struct Upgrade {
@@ -178,7 +229,13 @@ pub enum VarRef {
 pub struct Variable {
   pub name: String,
   pub ty: Type,
-  pub initial_value: Expression,
+  pub initial_value: Option<Expression>,
+}
+
+impl Variable {
+  pub fn new(name: String, ty: Type, initial_value: Option<Expression>) -> Self {
+    Variable { name, ty, initial_value }
+  }
 }
 
 pub struct Range {
@@ -259,8 +316,19 @@ pub struct Random {
 }
 
 pub struct Event {
+  pub name: String,
   pub params: Vec<EventParam>,
   pub commands: Vec<Box<Command>>,
+}
+
+impl Event {
+  pub fn new(name: String) -> Self {
+    Event {
+      name,
+      params: Vec::new(),
+      commands: Vec::new(),
+    }
+  }
 }
 
 pub struct EventParam {

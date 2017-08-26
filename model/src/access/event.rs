@@ -1,6 +1,6 @@
 use event::EventFuture;
 use event::trigger::EventTrigger;
-use sf_util::future::SFFuture;
+use util::future::SFFuture;
 
 pub trait EventAccessor<'a>: Send + Sync {
   

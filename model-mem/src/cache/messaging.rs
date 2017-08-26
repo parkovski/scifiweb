@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::Entry as HEntry;
 use std::collections::btree_map::Entry as BTEntry;
 
-use sf_model::instance::Target;
-use sf_model::instance::messaging::{Mailbox, MessagingError, Message, MessageThread};
+use model::instance::Target;
+use model::instance::messaging::{Mailbox, MessagingError, Message, MessageThread};
 
 pub struct MailboxCache {
   // Mailbox ID to mailbox

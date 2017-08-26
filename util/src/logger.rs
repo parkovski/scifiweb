@@ -3,29 +3,36 @@ use std::io::Write;
 use log::{set_logger, Log, LogLevel, LogLevelFilter, LogMetadata, LogRecord, MaxLogLevelFilter};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-pub fn init() -> Result<(), ::log::SetLoggerError> {
+pub fn init(prefixes: &'static [&'static str], level: LogLevelFilter)
+  -> Result<(), ::log::SetLoggerError>
+{
   set_logger(|max_level| {
-    max_level.set(LogLevelFilter::Trace);
-    Box::new(Logger::new(max_level))
+    max_level.set(level);
+    Box::new(Logger::new(max_level, prefixes))
   })
 }
 
 struct Logger {
   start_time: Instant,
   max_level: MaxLogLevelFilter,
+  prefixes: &'static [&'static str],
 }
 
 impl Logger {
-  pub fn new(max_level: MaxLogLevelFilter) -> Self {
+  pub fn new(max_level: MaxLogLevelFilter, prefixes: &'static [&'static str]) -> Self {
     Logger {
       start_time: Instant::now(),
       max_level,
+      prefixes,
     }
   }
 
   fn filter(&self, record: &LogRecord) -> bool {
     let path = record.location().module_path();
-    path.starts_with("scifiweb::") || path.starts_with("sf_")
+    for p in self.prefixes {
+      if path.starts_with(p) { return true; }
+    }
+    false
   }
 }
 

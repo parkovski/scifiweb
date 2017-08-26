@@ -2,7 +2,7 @@ use std::time::Duration;
 use futures::future::Future;
 use instance::Target;
 use instance::messaging::{Mailbox, MessagingError, Message, MessageLimit, MessageThread};
-use sf_util::IntoBox;
+use util::IntoBox;
 
 pub type MessagingFuture<'a, Item> = Box<Future<Item = Item, Error = MessagingError> + Send + 'a>;
 

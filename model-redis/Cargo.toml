@@ -1,5 +1,5 @@
 [package]
-name = "sf-model-redis"
+name = "scifi-model-redis"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 

@@ -2,17 +2,17 @@ extern crate hyper;
 extern crate futures;
 #[macro_use]
 extern crate log;
-extern crate sf_model;
-extern crate sf_router;
-extern crate sf_util;
+extern crate scifi_model as model;
+extern crate scifi_router as router;
+extern crate scifi_util as util;
 
 use std::sync::Arc;
 use hyper::{Request, Response};
 use hyper::server::Http;
-use sf_model::access::ClonableAccessor;
-use sf_router::Rejection;
-use sf_router::hyper_router::HyperRouter;
-use sf_util::future::SFFuture;
+use model::access::ClonableAccessor;
+use router::Rejection;
+use router::hyper_router::HyperRouter;
+use util::future::SFFuture;
 
 mod error;
 use self::error::ErrorHandler;
@@ -21,7 +21,7 @@ use self::routes::setup_routes;
 
 pub type RouteFuture = SFFuture<'static, Response, error::Error>;
 pub type FilterFuture = SFFuture<'static, (), Rejection<Response, error::Error>>;
-pub type Router = sf_router::Router<'static, Request, RouteFuture, FilterFuture, ErrorHandler>;
+pub type Router = router::Router<'static, Request, RouteFuture, FilterFuture, ErrorHandler>;
 
 pub fn start<A: ClonableAccessor<'static> + 'static>(addr: &str, accessor: A) -> hyper::Result<()> {
   let router = Arc::new(HyperRouter::new(setup_routes(accessor)));

@@ -1,5 +1,5 @@
 [package]
-name = "sf-model"
+name = "scifi-model"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
@@ -10,5 +10,5 @@ serde = "*"
 serde_json = "1.0"
 serde_derive = "1.0"
 log = "0.3.8"
-sf-auth = {path = "../auth"}
-sf-util = {path = "../util"}
+scifi-auth = {path = "../auth"}
+scifi-util = {path = "../util"}
