@@ -3,10 +3,6 @@ name = "scifi-vm"
 version = "0.1.0"
 authors = ["Parker Snell <parkersnell@gmail.com>"]
 
-[[bin]]
-path = "src/test.rs"
-name = "vmtest"
-
 [dependencies]
 nom = {version = "3.2.0", features = ["nightly"]}
 fxhash = "0.2.1"
@@ -17,3 +13,4 @@ serde = "*"
 serde_json = "1.0"
 serde_derive = "1.0"
 scifi-util = {path = "../util"}
+bitflags = "0.9"

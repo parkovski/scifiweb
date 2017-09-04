@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "cargo-clippy"), allow(unknown_lints))]
 
-extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
@@ -106,7 +105,7 @@ fn main() {
 
   if args.cmd_build {
     match vm::compile_graph(Path::new("./vm/dot_scifi/simple.scifi")) {
-      Ok(_) => println!("Ok"),
+      Ok(_) => info!("Loaded program"),
       Err(e) => error!("{}", e),
     }
   } else {

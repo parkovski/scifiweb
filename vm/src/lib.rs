@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 #![feature(conservative_impl_trait)]
+#![feature(box_syntax, box_patterns)]
 
 #[macro_use]
 extern crate nom;
@@ -10,10 +11,12 @@ extern crate log;
 extern crate fxhash;
 #[macro_use]
 extern crate error_chain;
-extern crate serde;
+//extern crate serde;
+//#[macro_use]
+//extern crate serde_derive;
+//extern crate serde_json;
 #[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
+extern crate bitflags;
 extern crate scifi_util as util;
 
 pub mod ast;

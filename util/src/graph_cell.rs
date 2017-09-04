@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
-use std::ops::CoerceUnsized;
-use std::marker::Unsize;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, CoerceUnsized};
+use std::marker::{Unsize, Copy};
+use std::clone::Clone;
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Display};
@@ -39,41 +39,77 @@ impl<T> GraphCell<T> {
       data: UnsafeCell::new(data),
     }
   }
+/*
+  /// Returns a box because you can't move something that's
+  /// got pointers to it. It looks like eventually Boxed
+  /// would cover returning a different smart pointer,
+  /// but they don't even implement it on nightly yet.
+  pub fn self_referential<'a, N>(make_new: N) -> Box<GraphCell<T>>
+  where
+    T: 'a,
+    N: FnOnce(GraphRef<'a, T>) -> T,
+  {
+    let cell = Box::new(GraphCell {
+      borrow_count: Cell::new(0),
+      data: UnsafeCell::new(unsafe { mem::uninitialized() }),
+    });
+    let self_ref = cell.asleep();
+    // Take a reference so it will panic if you try
+    // to use the uninitialized reference during initialization.
+    let awake_ref = cell.awake_mut();
+    // I think placement new would be ideal here, but this works too.
+    mem::forget(mem::replace(unsafe { &mut *cell.data.get() }, make_new(self_ref)));
+    cell
+  }
+*/
 }
 
-impl<'a, T> GraphCell<T>
-where
-  Self: 'a,
-  T: ?Sized + 'a,
-{
-  pub fn asleep(&'a self) -> GraphRef<'a, T> {
-    GraphRef { data: self.data.get(), borrow_count: &self.borrow_count }
+impl<T: ?Sized> GraphCell<T> {
+  pub fn asleep<'a>(&self) -> GraphRef<'a, T> where Self: 'a {
+    GraphRef {
+      data: self.data.get(),
+      borrow_count: unsafe { self.borrow_count() },
+    }
   }
 
-  pub fn asleep_mut(&'a self) -> GraphRefMut<'a, T> {
-    GraphRefMut { data: self.data.get(), borrow_count: &self.borrow_count }
+  pub fn asleep_mut<'a>(&self) -> GraphRefMut<'a, T> where Self: 'a {
+    GraphRefMut {
+      data: self.data.get(),
+      borrow_count: unsafe { self.borrow_count() },
+    }
   }
 
-  pub fn awake(&'a self) -> GraphRefAwake<'a, T> {
+  pub fn awake<'a>(&self) -> GraphRefAwake<'a, T> where Self: 'a {
     acquire_for_read(&self.borrow_count);
-    GraphRefAwake {
-      data: unsafe { &*self.data.get() },
-      borrow_count: &self.borrow_count
+    unsafe {
+      GraphRefAwake {
+        data: &*self.data.get(),
+        borrow_count: self.borrow_count(),
+      }
     }
   }
 
-  pub fn awake_mut(&'a self) -> GraphRefAwakeMut<'a, T> {
+  pub fn awake_mut<'a>(&self) -> GraphRefAwakeMut<'a, T> where Self: 'a {
     acquire_for_write(&self.borrow_count);
-    GraphRefAwakeMut {
-      data: unsafe { &mut *self.data.get() },
-      borrow_count: &self.borrow_count
+    unsafe {
+      GraphRefAwakeMut {
+        data: &mut *self.data.get(),
+        borrow_count: self.borrow_count(),
+      }
     }
+  }
+
+  unsafe fn borrow_count<'a>(&self) -> &'a Cell<usize> where Self: 'a {
+    &*(&self.borrow_count as *const _)
   }
 }
 
 impl<T: Debug + ?Sized> Debug for GraphCell<T> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    self.awake().fmt(f)
+    f.debug_struct("GraphCell")
+      .field("data", &self.awake())
+      .field("borrow_count", &self.borrow_count.get())
+      .finish()
   }
 }
 
@@ -94,8 +130,6 @@ impl<T: Default> Default for GraphCell<T> {
     GraphCell::new(T::default())
   }
 }
-
-unsafe impl<T: Send + ?Sized> Send for GraphCell<T> {}
 
 impl<T: PartialEq<T> + ?Sized> PartialEq for GraphCell<T> {
   fn eq(&self, other: &Self) -> bool {
@@ -128,7 +162,7 @@ impl<T: CoerceUnsized<U>, U> CoerceUnsized<GraphCell<U>> for GraphCell<T>
 
 // =====
 
-#[derive(Copy, Clone)]
+#[derive(Debug)]
 pub struct GraphRef<'a, T: ?Sized + 'a> {
   data: *const T,
   borrow_count: &'a Cell<usize>,
@@ -137,10 +171,23 @@ pub struct GraphRef<'a, T: ?Sized + 'a> {
 impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
   pub fn awake(&self) -> GraphRefAwake<'a, T> {
     acquire_for_read(self.borrow_count);
-    GraphRefAwake {
-      data: unsafe { &*self.data },
-      borrow_count: self.borrow_count,
+    unsafe {
+      GraphRefAwake {
+        data: &*self.data,
+        borrow_count: &*(self.borrow_count as *const _),
+      }
     }
+  }
+
+  fn map_data<F, U>(&self, map_fn: F) -> U
+  where
+    F: FnOnce(&'a T) -> U,
+  {
+    acquire_for_read(self.borrow_count);
+    let ref_data: &'a T = unsafe { &*self.data };
+    let new_data = map_fn(ref_data);
+    self.borrow_count.set(self.borrow_count.get() - 1);
+    new_data
   }
 
   pub fn map<F, U>(&self, map_fn: F) -> GraphRef<'a, U>
@@ -148,14 +195,46 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
     F: FnOnce(&'a T) -> &'a U,
     U: 'a,
   {
-    acquire_for_read(self.borrow_count);
-    let ref_data: &'a T = unsafe { &*self.data };
-    let new_ref_data = map_fn(ref_data);
-    let new_data = new_ref_data as *const _;
-    self.borrow_count.set(self.borrow_count.get() - 1);
-    GraphRef { data: new_data, borrow_count: self.borrow_count }
+    let new_data = self.map_data(map_fn) as *const _;
+    GraphRef {
+      data: new_data,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    }
+  }
+
+  pub fn map_opt<F, U>(&self, map_fn: F) -> Option<GraphRef<'a, U>>
+  where
+    F: FnOnce(&'a T) -> Option<&'a U>,
+    U: 'a,
+  {
+    self.map_data(map_fn).map(|data| GraphRef {
+      data: data as *const _,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    })
+  }
+
+  pub fn map_res<F, U, E>(&self, map_fn: F) -> Result<GraphRef<'a, U>, E>
+  where
+    F: FnOnce(&'a T) -> Result<&'a U, E>,
+    U: 'a,
+  {
+    self.map_data(map_fn).map(|data| GraphRef {
+      data: data as *const _,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    })
   }
 }
+
+impl<'a, T: ?Sized + 'a> Clone for GraphRef<'a, T> {
+  fn clone(&self) -> Self {
+    GraphRef {
+      data: self.data,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    }
+  }
+}
+
+impl<'a, T: ?Sized + 'a> Copy for GraphRef<'a, T> {}
 
 impl<'a, T, U> CoerceUnsized<GraphRef<'a, U>> for GraphRef<'a, T>
 where
@@ -165,7 +244,7 @@ where
 
 // =====
 
-#[derive(Copy, Clone)]
+#[derive(Debug)]
 pub struct GraphRefMut<'a, T: ?Sized + 'a> {
   data: *mut T,
   borrow_count: &'a Cell<usize>,
@@ -173,23 +252,41 @@ pub struct GraphRefMut<'a, T: ?Sized + 'a> {
 
 impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
   pub fn asleep_ref(&self) -> GraphRef<'a, T> {
-    GraphRef { data: self.data, borrow_count: self.borrow_count }
+    GraphRef {
+      data: self.data,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    }
   }
 
   pub fn awake_ref(&self) -> GraphRefAwake<'a, T> {
     acquire_for_read(self.borrow_count);
-    GraphRefAwake {
-      data: unsafe { &*self.data },
-      borrow_count: self.borrow_count,
+    unsafe {
+      GraphRefAwake {
+        data: &*self.data,
+        borrow_count: &*(self.borrow_count as *const _),
+      }
     }
   }
 
   pub fn awake_mut(&self) -> GraphRefAwakeMut<'a, T> {
     acquire_for_write(self.borrow_count);
-    GraphRefAwakeMut {
-      data: unsafe { &mut *self.data },
-      borrow_count: self.borrow_count,
+    unsafe {
+      GraphRefAwakeMut {
+        data: &mut *self.data,
+        borrow_count: &*(self.borrow_count as *const _),
+      }
     }
+  }
+
+  fn map_data<F, U>(&self, map_fn: F) -> U
+  where
+    F: FnOnce(&'a mut T) -> U,
+  {
+    acquire_for_write(self.borrow_count);
+    let ref_data: &'a mut T = unsafe { &mut *self.data };
+    let new_data = map_fn(ref_data);
+    self.borrow_count.set(0);
+    new_data
   }
 
   pub fn map<F, U>(&self, map_fn: F) -> GraphRefMut<'a, U>
@@ -197,14 +294,46 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     F: FnOnce(&'a mut T) -> &'a mut U,
     U: 'a,
   {
-    acquire_for_write(self.borrow_count);
-    let ref_data: &'a mut T = unsafe { &mut *self.data };
-    let new_ref_data = map_fn(ref_data);
-    let new_data = new_ref_data as *mut _;
-    self.borrow_count.set(0);
-    GraphRefMut { data: new_data, borrow_count: self.borrow_count }
+    let new_data = self.map_data(map_fn) as *mut _;
+    GraphRefMut {
+      data: new_data,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    }
+  }
+
+  pub fn map_opt<F, U>(&self, map_fn: F) -> Option<GraphRefMut<'a, U>>
+  where
+    F: FnOnce(&'a mut T) -> Option<&'a mut U>,
+    U: 'a,
+  {
+    self.map_data(map_fn).map(|data| GraphRefMut {
+      data: data as *mut _,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    })
+  }
+
+  pub fn map_res<F, U, E>(&self, map_fn: F) -> Result<GraphRefMut<'a, U>, E>
+  where
+    F: FnOnce(&'a mut T) -> Result<&'a mut U, E>,
+    U: 'a,
+  {
+    self.map_data(map_fn).map(|data| GraphRefMut {
+      data: data as *mut _,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    })
   }
 }
+
+impl<'a, T: ?Sized + 'a> Clone for GraphRefMut<'a, T> {
+  fn clone(&self) -> Self {
+    GraphRefMut {
+      data: self.data,
+      borrow_count: unsafe { &*(self.borrow_count as *const _) },
+    }
+  }
+}
+
+impl<'a, T: ?Sized + 'a> Copy for GraphRefMut<'a, T> {}
 
 impl<'a, T, U> CoerceUnsized<GraphRefMut<'a, U>> for GraphRefMut<'a, T>
 where
@@ -223,19 +352,25 @@ impl<'a, T: ?Sized + 'a> GraphRefAwake<'a, T> {
   pub fn asleep(awake: &GraphRefAwake<'a, T>) -> GraphRef<'a, T> {
     GraphRef {
       data: awake.data as *const _,
-      borrow_count: awake.borrow_count
+      borrow_count: unsafe { &*(awake.borrow_count as *const _) },
     }
   }
 
   pub fn clone(orig: &GraphRefAwake<'a, T>) -> Self {
     orig.borrow_count.set(orig.borrow_count.get() + 1);
-    GraphRefAwake { data: orig.data, borrow_count: orig.borrow_count }
+    GraphRefAwake {
+      data: orig.data,
+      borrow_count: unsafe { &*(orig.borrow_count as *const _) },
+    }
   }
 
   pub fn map<F, U>(orig: GraphRefAwake<'a, T>, map_fn: F) -> GraphRefAwake<'a, U>
   where F: FnOnce(&'a T) -> &'a U
   {
-    GraphRefAwake { data: map_fn(orig.data), borrow_count: orig.borrow_count }
+    GraphRefAwake {
+      data: map_fn(orig.data),
+      borrow_count: orig.borrow_count
+    }
   }
 }
 
@@ -252,13 +387,13 @@ impl<'a, T: ?Sized + 'a> Deref for GraphRefAwake<'a, T> {
   }
 }
 
-impl<'a, T: Debug + 'a> Debug for GraphRefAwake<'a, T> {
+impl<'a, T: Debug + ?Sized + 'a> Debug for GraphRefAwake<'a, T> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     <T as Debug>::fmt(self.data, f)
   }
 }
 
-impl<'a, T: Display + 'a> Display for GraphRefAwake<'a, T> {
+impl<'a, T: Display + ?Sized + 'a> Display for GraphRefAwake<'a, T> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     <T as Display>::fmt(self.data, f)
   }
@@ -279,11 +414,17 @@ pub struct GraphRefAwakeMut<'a, T: ?Sized + 'a> {
 
 impl<'a, T: ?Sized + 'a> GraphRefAwakeMut<'a, T> {
   pub fn asleep_ref(awake: &mut GraphRefAwakeMut<'a, T>) -> GraphRef<'a, T> {
-    GraphRef { data: awake.data, borrow_count: awake.borrow_count }
+    GraphRef {
+      data: awake.data,
+      borrow_count: unsafe { &*(awake.borrow_count as *const _) },
+    }
   }
 
   pub fn asleep_mut(awake: &mut GraphRefAwakeMut<'a, T>) -> GraphRefMut<'a, T> {
-    GraphRefMut { data: awake.data, borrow_count: awake.borrow_count }
+    GraphRefMut {
+      data: awake.data,
+      borrow_count: unsafe { &*(awake.borrow_count as *const _) },
+    }
   }
 
   pub fn awake_ref(awake_mut: GraphRefAwakeMut<'a, T>) -> GraphRefAwake<'a, T> {
@@ -293,13 +434,21 @@ impl<'a, T: ?Sized + 'a> GraphRefAwakeMut<'a, T> {
     // AwakeMut, it is the only active ref, so we can just
     // set this to 1.
     borrow_count.set(1);
-    GraphRefAwake { data: unsafe { &*data }, borrow_count }
+    unsafe {
+      GraphRefAwake {
+        data: &*data,
+        borrow_count: &*(borrow_count as *const _),
+      }
+    }
   }
 
   pub fn map<F, U>(orig: GraphRefAwakeMut<'a, T>, map_fn: F) -> GraphRefAwakeMut<'a, U>
   where F: FnOnce(&'a mut T) -> &'a mut U
   {
-    GraphRefAwakeMut { data: map_fn(orig.data), borrow_count: orig.borrow_count }
+    GraphRefAwakeMut {
+      data: map_fn(orig.data),
+      borrow_count: unsafe { &*(orig.borrow_count as *const _) },
+    }
   }
 }
 

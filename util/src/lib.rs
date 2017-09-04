@@ -71,7 +71,7 @@ impl<'a, T: 'a> IntoBox<'a, T> for T {
   }
 }
 
-#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
 struct SharedStringWrapper(Arc<str>);
 
 impl Borrow<str> for SharedStringWrapper {
@@ -80,13 +80,14 @@ impl Borrow<str> for SharedStringWrapper {
   }
 }
 
-pub struct SharedString {
+#[derive(Debug)]
+pub struct SharedStrings {
   strings: RefCell<FxHashSet<SharedStringWrapper>>,
 }
 
-impl SharedString {
+impl SharedStrings {
   pub fn new() -> Self {
-    SharedString { strings: RefCell::new(Default::default()) }
+    SharedStrings { strings: RefCell::new(Default::default()) }
   }
 
   pub fn get(&self, s: &str) -> Arc<str> {

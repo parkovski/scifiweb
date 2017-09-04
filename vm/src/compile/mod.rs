@@ -2,8 +2,12 @@ mod lexer;
 mod parser_rd;
 mod token;
 
+pub use self::token::{TokenSpan, TokenValue};
+
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::path::Path;
+use ast::Ast;
+use util::graph_cell::GraphCell;
 
 /// In the lexer, tokens are not created until
 /// after the errors are.
@@ -51,6 +55,7 @@ mod parse_errors {
   #![allow(unused_doc_comment)]
 
   use nom;
+  use ast;
   use super::Placeholder;
   use super::token::TokenSpan;
 
@@ -75,10 +80,16 @@ mod parse_errors {
         description("expected token not found")
         display("{}", message)
       }
+
+      Syntax(message: String) {
+        description("syntax error")
+        display("syntax error: {}", message)
+      }
     }
 
     foreign_links {
       Io(::std::io::Error);
+      Ast(ast::AstError);
     }
   }
 
@@ -111,6 +122,8 @@ pub use self::parse_errors::{
   ResultExt as ParseResultExt,
 };
 
-pub fn compile_graph(filename: &Path) -> ParseResult<::ast::Ast> {
-  parser_rd::Parser::parse(filename)
+pub fn compile_graph<'a>(filename: &Path) -> ParseResult<Box<GraphCell<Ast<'a>>>> {
+  let ast = parser_rd::Parser::parse(filename)?;
+  println!("{:#?}", &ast.awake());
+  Ok(ast)
 }

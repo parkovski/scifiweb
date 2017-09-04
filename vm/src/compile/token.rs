@@ -2,25 +2,39 @@ use std::str;
 use std::fmt::{self, Debug, Display};
 use std::sync::Arc;
 use std::path::PathBuf;
-use std::cmp::Ordering;
 use std::ops::Deref;
+use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
+use std::default::Default;
 use fxhash::FxHashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TokenSpan {
   pub filename: Arc<PathBuf>,
   pub line: usize,
+  pub end_line: usize,
   pub start: usize,
   pub end: usize,
 }
 
 impl TokenSpan {
   pub fn new(filename: Arc<PathBuf>) -> Self {
-    TokenSpan { filename, line: 1, start: 1, end: 1 }
+    TokenSpan { filename, line: 1, end_line: 1, start: 1, end: 1 }
   }
 
   pub fn with_position(filename: Arc<PathBuf>, line: usize, start: usize, end: usize) -> Self {
-    TokenSpan { filename, line, start, end }
+    TokenSpan { filename, line, end_line: line, start, end }
+  }
+
+  pub fn from_to(&self, other: &TokenSpan) -> Self {
+    if self.filename != other.filename { return self.clone(); }
+    TokenSpan {
+      filename: self.filename.clone(),
+      line: self.line,
+      end_line: other.end_line,
+      start: self.start,
+      end: other.end,
+    }
   }
 }
 
@@ -81,6 +95,43 @@ pub enum TokenKind<'a> {
   Exclamation,
 }
 
+impl<'a> TokenKind<'a> {
+  pub fn as_str(&self) -> &str {
+    use self::TokenKind as TK;
+    match *self {
+      TK::Invalid(_) => "invalid character",
+      TK::Eof => "end of input",
+      TK::Identifier(s) => s,
+      TK::Label(s) => s,
+      TK::String(s) => s,
+      TK::Integer(_) => "integer",
+      TK::Decimal(_) => "decimal",
+      TK::Percentage(_) => "percentage",
+      TK::Keyword(k) => k.as_str(),
+      TK::Semicolon => ";",
+      TK::Dot => ".",
+      TK::Comma => ",",
+      TK::LParen => "(",
+      TK::RParen => ")",
+      TK::LSquareBracket => "[",
+      TK::RSquareBracket => "]",
+      TK::Minus => "-",
+      TK::Plus => "+",
+      TK::Multiply => "*",
+      TK::Divide => "/",
+      TK::Caret => "^",
+      TK::Equal => "=",
+      TK::NotEqual => "!=",
+      TK::Less => "<",
+      TK::LessEqual => "<=",
+      TK::Greater => ">",
+      TK::GreaterEqual => ">=",
+      TK::PercentSign => "%",
+      TK::Exclamation => "!",
+    }
+  }
+}
+
 impl<'a> Display for TokenKind<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     use self::TokenKind as TK;
@@ -93,105 +144,104 @@ impl<'a> Display for TokenKind<'a> {
       TK::Integer(i) => write!(f, "integer {}", i),
       TK::Decimal(d) => write!(f, "decimal {}", d),
       TK::Percentage(p) => write!(f, "percentage {}%", p),
-      TK::Keyword(k) => write!(f, "{}", k),
-      TK::Semicolon => write!(f, ";"),
-      TK::Dot => write!(f, "."),
-      TK::Comma => write!(f, ","),
-      TK::LParen => write!(f, "("),
-      TK::RParen => write!(f, ")"),
-      TK::LSquareBracket => write!(f, "["),
-      TK::RSquareBracket => write!(f, "]"),
-      TK::Minus => write!(f, "-"),
-      TK::Plus => write!(f, "+"),
-      TK::Multiply => write!(f, "*"),
-      TK::Divide => write!(f, "/"),
-      TK::Caret => write!(f, "^"),
-      TK::Equal => write!(f, "="),
-      TK::NotEqual => write!(f, "!="),
-      TK::Less => write!(f, "<"),
-      TK::LessEqual => write!(f, "<="),
-      TK::Greater => write!(f, ">"),
-      TK::GreaterEqual => write!(f, ">="),
-      TK::PercentSign => write!(f, "%"),
-      TK::Exclamation => write!(f, "!"),
+      other @ _ => f.write_str(other.as_str()),
     }
   }
 }
 
-impl<'a> From<Token<'a>> for TokenValue<String> {
-  fn from(token: Token<'a>) -> Self {
-    use self::TokenKind as TK;
-    let s = match token.kind {
-      TK::Invalid(c) => "invalid".to_string(),
-      TK::Eof => "end of input".to_string(),
-      TK::Identifier(s) => s.to_string(),
-      TK::Label(s) => s.to_string(),
-      TK::String(s) => s.to_string(),
-      TK::Integer(i) => i.to_string(),
-      TK::Decimal(d) => d.to_string(),
-      TK::Percentage(p) => p.to_string(),
-      TK::Keyword(k) => k.to_string(),
-      other @ _ => other.to_string(),
-    };
-
-    TokenValue { value: s, span: token.span }
-  }
-}
-
-impl<'a> From<Token<'a>> for TokenValue<i64> {
-  fn from(token: Token<'a>) -> Self {
-    let i = if let TokenKind::Integer(i) = token.kind {
-      i
-    } else {
-      panic!("Can't do this conversion");
-    };
-
-    TokenValue { value: i, span: token.span }
-  }
-}
-
-impl<'a> From<Token<'a>> for TokenValue<f64> {
-  fn from(token: Token<'a>) -> Self {
-    let f = match token.kind {
-      TokenKind::Decimal(d) => d,
-      TokenKind::Percentage(p) => p,
-      _ => panic!("Can't do this conversion"),
-    };
-
-    TokenValue { value: f, span: token.span }
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct TokenValue<T: Debug + Clone> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq,
+{
   value: T,
   span: TokenSpan,
 }
 
-impl<T: Debug + Clone> Deref for TokenValue<T> {
+impl<T> TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq,
+{
+  pub fn new(value: T, span: TokenSpan) -> Self {
+    TokenValue { value, span }
+  }
+
+  /// Assigns a default value
+  pub fn with_default(other: &TokenValue<T>) -> Self where T: Default {
+    TokenValue {
+      value: Default::default(),
+      span: other.span.clone()
+    }
+  }
+
+  pub fn with_span_range(value: T, start: &TokenSpan, end: &TokenSpan) -> Self {
+    TokenValue { value, span: start.from_to(end) }
+  }
+
+  pub fn value(&self) -> &T {
+    &self.value
+  }
+
+  pub fn span(&self) -> &TokenSpan {
+    &self.span
+  }
+
+  pub fn into_inner(self) -> T {
+    self.value
+  }
+}
+
+impl<T> Display for TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq,
+{
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}: {}", &self.span, &self.value)
+  }
+}
+
+impl<T> Deref for TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq,
+{
   type Target = T;
   fn deref(&self) -> &T {
     &self.value
   }
 }
 
-impl<T: Debug + Clone> PartialEq for TokenValue<T> {
-  fn eq(&self, other: &TokenValue<T>) -> bool {
-    self.span == other.span
+impl<T> Borrow<T> for TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq,
+{
+  fn borrow(&self) -> &T {
+    &self.value
   }
 }
 
-impl<T: Debug + Clone> Eq for TokenValue<T> {}
-
-impl<T: Debug + Clone> PartialOrd for TokenValue<T> {
-  fn partial_cmp(&self, other: &TokenValue<T>) -> Option<Ordering> {
-    self.span.partial_cmp(&other.span)
+impl Borrow<str> for TokenValue<Arc<str>> {
+  fn borrow(&self) -> &str {
+    &self.value
   }
 }
 
-impl<T: Debug + Clone> Ord for TokenValue<T> {
-  fn cmp(&self, other: &TokenValue<T>) -> Ordering {
-    self.span.cmp(&other.span)
+impl<T> Default for TokenValue<T>
+where
+  T: Default + Debug + Display + Clone + PartialEq,
+{
+  fn default() -> Self {
+    TokenValue { value: T::default(), span: TokenSpan::default() }
+  }
+}
+
+// Only hash the value so it can be used as a name key
+// in a hash map.
+impl<T> Hash for TokenValue<T>
+where
+  T: Hash + Debug + Display + Clone + PartialEq,
+{
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.value.hash(state);
   }
 }
 
@@ -280,11 +330,17 @@ macro_rules! keywords {
       $($enm),+
     }
 
+    impl $typ {
+      pub fn as_str(&self) -> &'static str {
+        match *self {
+          $($typ::$enm => $s),+
+        }
+      }
+    }
+
     impl Display for $typ {
       fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match *self {
-          $($typ::$enm => $s),+
-        })
+        f.write_str(self.as_str())
       }
     }
 
@@ -304,18 +360,20 @@ keywords! {
 
   "switch" => Switch,
   "text" => Text,
+  "integer" => Integer,
+  "decimal" => Decimal,
   "localized" => Localized,
-  "gameserver" => Gameserver,
-  "admin" => Admin,
   "datetime" => Datetime,
-  "gameresult" => Gameresult,
+  "timespan" => Timespan,
 
-  "random" => Random,
+  "map" => Map,
+  "array" => Array,
+  "remote" => Remote,
   "user" => User,
   "group" => Group,
   "collectable" => Collectable,
   "event" => Event,
-  "map" => Map,
+  "function" => Function,
 
   "on" => On,
   "off" => Off,
@@ -352,6 +410,7 @@ keywords! {
   "find" => Find,
   "notify" => Notify,
   "option" => Option,
+  "random" => Random,
 
   "include" => Include,
   "in" => In,

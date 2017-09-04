@@ -88,5 +88,5 @@ impl<T: Entity> EntityObject for T {
 pub fn initialize() {
   //event::registry::EventListenerRegistry::initialize();
   //event::registry::EventTriggerRegistry::initialize();
-  //trace!("Event registries initialized");
+  trace!("Event registries initialized");
 }

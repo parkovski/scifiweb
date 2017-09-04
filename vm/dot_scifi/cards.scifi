@@ -11,3 +11,12 @@ RareCard: collectable group;
   has collectable [
     FireBow, FreezeRay
   ];
+
+# Common cards
+Bomb: collectable;
+Bow: collectable;
+Sword: collectable;
+
+# Rare cards
+FireBow: collectable;
+FreezeRay: collectable;

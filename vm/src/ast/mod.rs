@@ -1,211 +1,238 @@
-use std::sync::{Arc, Weak};
-use std::mem;
+use std::sync::Arc;
+use std::default::Default;
+use std::fmt::{Debug, Display};
+use fxhash::FxHashMap;
+use util::{SharedStrings, InsertUnique};
+use util::graph_cell::*;
+use compile::{TokenSpan, TokenValue};
 
-pub enum ItemRef<T> {
-  /// A concrete item reference.
-  Resolved(T),
-  /// A not-yet-defined item reference by name.
-  Placeholder(String),
-  /// Tried to resolve the reference and failed.
-  Invalid(String),
+#[macro_use]
+pub mod macros;
+pub mod ty;
+pub mod var;
+
+use self::ty::*;
+use self::errors::*;
+
+// =====
+
+pub trait Named: Debug + Display {
+  fn name(&self) -> &str;
+  fn item_name(&self) -> &'static str;
 }
 
-impl<T> ItemRef<T> {
-  pub fn unwrap(self) -> T {
-    match self {
-      ItemRef::Resolved(container) => container,
-      _ => panic!("Called ItemRef::unwrap() on unresolved value"),
+pub trait SourceItem: Named {
+  fn source_name(&self) -> &TokenValue<Arc<str>>;
+  fn span(&self) -> &TokenSpan;
+
+  /// After this, the item knows all of its references
+  /// exist, but doesn't yet know if they all fit together.
+  fn resolve(&mut self) -> Result<()>;
+  /// After this, the program is valid. The item knows
+  /// where all its references are and that they are
+  /// all correctly formed.
+  fn typecheck(&mut self) -> Result<()>;
+}
+
+pub trait Owner<'a, T: SourceItem + 'a> {
+  fn insert(&mut self, item: T) -> Result<GraphRefMut<'a, T>>;
+  fn find(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
+}
+
+pub trait RefOwner<'a, T, O>
+where
+  T: SourceItem + 'a,
+  O: Owner<'a, T> + Debug + 'a,
+{
+  fn insert(&mut self, r: ItemRef<'a, T, O>) -> Result<()>;
+  fn has_ref(&self, name: &str) -> bool;
+}
+
+// =====
+
+#[derive(Debug, Clone)]
+pub struct ItemRef<'a, T, O>
+where
+  T: SourceItem + 'a,
+  O: Owner<'a, T> + Debug + 'a,
+{
+  name: TokenValue<Arc<str>>,
+  owner: GraphRef<'a, O>,
+  item: Option<GraphRef<'a, T>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItemRefMut<'a, T, O>
+where
+  T: SourceItem + 'a,
+  O: Owner<'a, T> + Debug + 'a,
+{
+  name: TokenValue<Arc<str>>,
+  owner: GraphRef<'a, O>,
+  item: Option<GraphRefMut<'a, T>>,
+}
+
+impl<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a> ItemRef<'a, T, O> {
+  pub fn new(name: TokenValue<Arc<str>>, owner: GraphRef<'a, O>) -> Self {
+    ItemRef {
+      name,
+      owner,
+      item: None,
     }
   }
 
-  pub fn unwrap_invalid(self) -> String {
-    match self {
-      ItemRef::Invalid(s) => s,
-      _ => panic!("Called ItemRef::unwrap_invalid() on non-invalid value"),
+  pub fn item(&self) -> Option<GraphRef<'a, T>> {
+    self.item
+  }
+}
+
+impl<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a> ItemRefMut<'a, T, O> {
+  pub fn new(name: TokenValue<Arc<str>>, owner: GraphRef<'a, O>) -> Self {
+    ItemRefMut {
+      name,
+      owner,
+      item: None,
     }
   }
 
-  pub fn is_resolved(&self) -> bool {
-    match *self {
-      ItemRef::Resolved(_) => true,
-      _ => false,
-    }
+  pub fn item(&self) -> Option<GraphRef<'a, T>> {
+    self.item.map(|r| r.asleep_ref())
   }
 
-  pub fn is_placeholder(&self) -> bool {
-    match *self {
-      ItemRef::Placeholder(_) => true,
-      _ => false,
-    }
+  pub fn item_mut(&mut self) -> Option<GraphRefMut<'a, T>> {
+    self.item
   }
+}
 
-  pub fn is_invalid(&self) -> bool {
-    match *self {
-      ItemRef::Invalid(_) => true,
-      _ => false,
-    }
-  }
-
-  pub fn resolve<F>(&mut self, resolver: F) -> bool
-  where
-    F: FnOnce(&str) -> Option<T>
-  {
-    let (new_val, success) = if let ItemRef::Placeholder(ref mut name) = *self {
-      match resolver(name) {
-        Some(resolved) => (ItemRef::Resolved(resolved), true),
-        None => (ItemRef::Invalid(mem::replace(name, String::new())), false),
+macro_rules! item_ref_impls {
+  ($t:ident, ($($conv:tt)*)) => (
+    impl<'a, T, O> Named for $t<'a, T, O>
+    where
+      T: SourceItem + 'a,
+      O: Owner<'a, T> + Debug + 'a,
+    {
+      fn name(&self) -> &str {
+        &self.name
       }
-    } else {
-      return self.is_resolved();
+
+      fn item_name(&self) -> &'static str {
+        "ref"
+      }
+    }
+
+    named_display!((<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a>)$t(<'a, T, O>));
+
+    impl<'a, T, O> SourceItem for $t<'a, T, O>
+    where
+      T: SourceItem + 'a,
+      O: Owner<'a, T> + Debug + 'a,
+    {
+      fn source_name(&self) -> &TokenValue<Arc<str>> {
+        &self.name
+      }
+
+      fn span(&self) -> &TokenSpan {
+        self.name.span()
+      }
+
+      fn resolve(&mut self) -> Result<()> {
+        match self.owner.awake().find(&self.name) {
+          Some(item) => Ok(self.item = Some(item $($conv)*)),
+          None => Err(ErrorKind::NotDefined(self.name.value().clone(), "ref").into()),
+        }
+      }
+
+      fn typecheck(&mut self) -> Result<()> {
+        Ok(())
+      }
+    }
+  );
+}
+
+item_ref_impls!(ItemRef, (.asleep_ref()));
+item_ref_impls!(ItemRefMut, ());
+
+// =====
+
+#[derive(Debug)]
+pub struct Ast<'a> {
+  types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
+  //globals: FxHashMap<Arc<str>, GraphCell<var::Var<'a>>>,
+  strings: SharedStrings,
+}
+
+impl<'a> Ast<'a> {
+  pub fn new() -> Box<GraphCell<Self>> {
+    box GraphCell::new(Ast {
+      types: Default::default(),
+      //globals: Default::default(),
+      strings: SharedStrings::new(),
+    })
+  }
+
+  pub fn shared_string(&self, s: &str) -> Arc<str> {
+    self.strings.get(s)
+  }
+
+  fn resolution_step<F>(&mut self, step: F) -> Result<()>
+  where F: Fn(&mut (SourceItem + 'a)) -> Result<()>
+  {
+    for ty in self.types.values_mut() {
+      (step)(&mut *ty.awake_mut())?;
+    }
+    Ok(())
+  }
+
+  pub fn typecheck(&mut self) -> Result<()> {
+    self.resolution_step(SourceItem::resolve)?;
+    self.resolution_step(SourceItem::typecheck)
+  }
+}
+
+impl<'a> Owner<'a, Type<'a>> for Ast<'a> {
+  fn insert(&mut self, ty: Type<'a>) -> Result<GraphRefMut<'a, Type<'a>>> {
+    let name = ty.source_name().value().clone();
+    let gc = GraphCell::new(ty);
+    let r = gc.asleep_mut();
+    self.types
+      .insert_unique(name, gc)
+      .map(|_| r)
+      .map_err(
+        |(name, ty)| ErrorKind::DuplicateDefinition(name, ty.awake().item_name()).into()
+      )
+  }
+
+  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Type<'a>>> {
+    self.types.get(name).map(|t| t.asleep_mut())
+  }
+}
+
+impl<'a, T> Owner<'a, T> for Ast<'a>
+where
+  T: CustomType<'a> + CastType<'a> + 'a
+{
+  fn insert(&mut self, ty: T) -> Result<GraphRefMut<'a, T>> {
+    let name = ty.source_name().value().clone();
+    let cell = GraphCell::new(Type::Custom(Box::new(ty)));
+    let gr = cell.asleep_mut();
+    match self.types.insert_unique(name, cell) {
+      Ok(()) => Ok(gr.map(|r| T::cast_mut(r.as_custom_mut().unwrap()))),
+      Err((name, _)) => Err(ErrorKind::DuplicateDefinition(name, "type").into())
+    }
+  }
+
+  /// This uses the mutable reference, so no other
+  /// references can be active when calling this.
+  fn find(&self, name: &str) -> Option<GraphRefMut<'a, T>> {
+    let gr = match self.types.get(name) {
+      Some(ref cell) => cell.asleep_mut(),
+      None => return None,
     };
-    *self = new_val;
-    success
+    gr.map_opt(|t| t.as_custom_mut().and_then(T::try_cast_mut))
   }
 }
 
-pub struct Ast {
-  pub users: Vec<Arc<User>>,
-  pub collectable_groups: Vec<Arc<CollectableGroup>>,
-  pub maps: Vec<Arc<Map>>,
-  pub events: Vec<Arc<Event>>,
-  pub randoms: Vec<Arc<Random>>,
-}
-
-impl Ast {
-  pub fn new() -> Self {
-    Ast {
-      users: Vec::new(),
-      collectable_groups: Vec::new(),
-      maps: Vec::new(),
-      events: Vec::new(),
-      randoms: Vec::new(),
-    }
-  }
-
-  pub fn merge(&mut self, other: Ast) {
-    self.users.extend(other.users);
-    self.collectable_groups.extend(other.collectable_groups);
-    self.maps.extend(other.maps);
-    self.events.extend(other.events);
-    self.randoms.extend(other.randoms);
-  }
-}
-
-pub trait AstAdd<T> {
-  fn add(&mut self, item: Arc<T>);
-}
-
-impl AstAdd<User> for Ast {
-  fn add(&mut self, item: Arc<User>) {
-    self.users.push(item);
-  }
-}
-
-impl AstAdd<CollectableGroup> for Ast {
-  fn add(&mut self, item: Arc<CollectableGroup>) {
-    self.collectable_groups.push(item);
-  }
-}
-
-impl AstAdd<Map> for Ast {
-  fn add(&mut self, item: Arc<Map>) {
-    self.maps.push(item);
-  }
-}
-
-impl AstAdd<Event> for Ast {
-  fn add(&mut self, item: Arc<Event>) {
-    self.events.push(item);
-  }
-}
-
-impl AstAdd<Random> for Ast {
-  fn add(&mut self, item: Arc<Random>) {
-    self.randoms.push(item);
-  }
-}
-
-pub struct User {
-  pub name: String,
-  pub collectables: Vec<CollectableProperty>,
-  pub properties: Vec<Variable>,
-}
-
-impl User {
-  pub fn new(name: String) -> Self {
-    User {
-      name,
-      collectables: Vec::new(),
-      properties: Vec::new(),
-    }
-  }
-}
-
-/// A reference to an item that can be
-/// either single or part of a group.
-pub enum GrpRef<T, G> {
-  Single(ItemRef<Arc<T>>),
-  Group(ItemRef<Arc<G>>),
-}
-
-pub struct CollectableProperty {
-  pub item: GrpRef<Collectable, CollectableGroup>,
-  pub amount: Range,
-}
-
-/// All collectables are in a group,
-/// but for the ones defined without the
-/// group keyword, there is only one member
-/// with the same name as the group.
-pub struct CollectableGroup {
-  pub name: String,
-  pub has_amount: bool,
-  pub properties: Vec<Arc<Variable>>,
-  // TODO: subgroups
-  pub collectables: Vec<Arc<Collectable>>,
-}
-
-impl CollectableGroup {
-  pub fn new(name: String) -> Self {
-    CollectableGroup {
-      name,
-      has_amount: false,
-      properties: Vec::new(),
-      collectables: Vec::new(),
-    }
-  }
-}
-
-impl AstAdd<Variable> for CollectableGroup {
-  fn add(&mut self, item: Arc<Variable>) {
-    self.properties.push(item);
-  }
-}
-
-impl AstAdd<Collectable> for CollectableGroup {
-  fn add(&mut self, item: Arc<Collectable>) {
-    self.collectables.push(item);
-  }
-}
-
-pub struct Collectable {
-  pub name: String,
-  pub group: ItemRef<Weak<CollectableGroup>>,
-  pub upgrades: Vec<Upgrade>,
-  pub redemptions: Vec<Redemption>,
-}
-
-impl Collectable {
-  pub fn new(name: String, group: String) -> Self {
-    Collectable {
-      name,
-      group: ItemRef::Placeholder(group),
-      upgrades: Vec::new(),
-      redemptions: Vec::new(),
-    }
-  }
-}
-
+/*
 pub struct Upgrade {
   pub cost: GrpRef<Collectable, CollectableGroup>,
   pub cost_amount: Expression,
@@ -220,51 +247,6 @@ pub enum Redemption {
     cost_amount: u32,
   }
 }
-
-pub enum VarRef {
-  Amount,
-  Var(ItemRef<Arc<Variable>>),
-}
-
-pub struct Variable {
-  pub name: String,
-  pub ty: Type,
-  pub initial_value: Option<Expression>,
-}
-
-impl Variable {
-  pub fn new(name: String, ty: Type, initial_value: Option<Expression>) -> Self {
-    Variable { name, ty, initial_value }
-  }
-}
-
-pub struct Range {
-  pub min: Option<i32>,
-  pub max: Option<i32>,
-}
-
-impl Range {
-  pub fn new(min: i32, max: i32) -> Self {
-    Range { min: Some(min), max: Some(max) }
-  }
-
-  pub fn exact(amt: i32) -> Self {
-    Range { min: Some(amt), max: Some(amt) }
-  }
-
-  pub fn with_min(min: i32) -> Self {
-    Range { min: Some(min), max: None }
-  }
-
-  pub fn with_max(max: i32) -> Self {
-    Range { min: None, max: Some(max) }
-  }
-
-  pub fn none() -> Self {
-    Range { min: None, max: None }
-  }
-}
-
 /// A map contains correlations
 /// between a constant value of any key
 /// property on an entity and one value
@@ -314,148 +296,51 @@ pub struct Random {
   pub amount: Range,
   pub items: RandomList,
 }
+*/
 
-pub struct Event {
-  pub name: String,
-  pub params: Vec<EventParam>,
-  pub commands: Vec<Box<Command>>,
-}
+mod errors {
+  // ?????
+  #![allow(unused_doc_comment)]
+  use std::sync::Arc;
 
-impl Event {
-  pub fn new(name: String) -> Self {
-    Event {
-      name,
-      params: Vec::new(),
-      commands: Vec::new(),
+  error_chain! {
+    errors {
+      InvalidOperation(operation: &'static str) {
+        description("invalid operation")
+        display("invalid operation: {}", operation)
+      }
+
+      NotDefined(name: Arc<str>, typ: &'static str) {
+        description("item not defined")
+        display("no definition for {} '{}'", typ, &name)
+      }
+
+      DuplicateDefinition(name: Arc<str>, typ: &'static str) {
+        description("item already defined")
+        display("{} '{}' already defined", typ, &name)
+      }
+
+      TypeResolution(expected: Arc<str>, found: Arc<str>) {
+        description("type resolution mismatch")
+        display("expected type '{}', found '{}' instead", &expected, &found)
+      }
+
+      ConflictingSuperType(ty: Arc<str>, parent: Arc<str>, conflicting_parent: Arc<str>) {
+        description("conflicting super type")
+        display(
+          "can't set super type of '{}' to '{}' because it already has super type '{}'",
+          &ty,
+          &conflicting_parent,
+          &parent
+        )
+      }
     }
   }
 }
 
-pub struct EventParam {
-  pub name: String,
-  pub ty: Type,
-}
-
-pub enum RemoteEventTarget {
-  GameServer,
-  User,
-}
-
-pub struct RemoteEvent {
-  pub target: RemoteEventTarget,
-  pub params: Vec<EventParam>,
-}
-
-pub enum Type {
-  Switch,
-  Text { localized: bool },
-  GameServer,
-  Admin,
-  DateTime,
-  GameResult,
-  Random(ItemRef<Arc<Random>>),
-  User(ItemRef<Arc<User>>),
-  Collectable(ItemRef<Arc<Collectable>>),
-  CollectableGroup(ItemRef<Arc<CollectableGroup>>),
-  Event(ItemRef<Arc<Event>>),
-  Map(ItemRef<Arc<Map>>),
-}
-
-pub enum Constant {
-  Switch(bool),
-  Int(i32),
-  Float(f32),
-  Text(String),
-}
-
-pub enum Expression {
-  Unary(UnaryExpression),
-  Binary(BinaryExpression),
-  Constant(Constant),
-  ReadVar(VarRef),
-  ReadProperty(VarRef, String),
-  Command(Box<Command>),
-}
-
-pub struct UnaryExpression {
-  pub op: UnaryOp,
-  pub expr: Box<Expression>,
-}
-
-pub struct BinaryExpression {
-  pub op: BinaryOp,
-  pub left: Box<Expression>,
-  pub right: Box<Expression>,
-}
-
-pub enum UnaryOp {
-  Not,
-  Negate,
-}
-
-pub enum BinaryOp {
-  Add,
-  Subtract,
-  Multiply,
-  Divide,
-  Power,
-  Modulo,
-  Less,
-  LessEqual,
-  Greater,
-  GreaterEqual,
-  Equal,
-  NotEqual,
-}
-
-pub struct CommandVisitor;
-pub trait Command {
-  fn visit(&self, visitor: &mut CommandVisitor);
-}
-
-pub struct AuthorizeCommand;
-impl Command for AuthorizeCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct AssertCommand;
-impl Command for AssertCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct AwardCommand;
-impl Command for AwardCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct OptionCommand {
-  pub options: Vec<Box<Command>>,
-}
-impl Command for OptionCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct SetCommand;
-impl Command for SetCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct FindCommand;
-impl Command for FindCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct TimerCommand;
-impl Command for TimerCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct NotifyCommand;
-impl Command for NotifyCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
-
-pub struct CostCommand;
-impl Command for CostCommand {
-  fn visit(&self, visitor: &mut CommandVisitor) {}
-}
+pub use self::errors::{
+  Error as AstError,
+  ErrorKind as AstErrorKind,
+  Result as AstResult,
+  ResultExt as ResultExt,
+};

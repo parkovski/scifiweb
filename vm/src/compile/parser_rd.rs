@@ -7,7 +7,9 @@ use std::fmt::Debug;
 use nom::IResult;
 use fxhash::FxHashSet;
 use ast::*;
+use ast::ty::*;
 use util::split_vec::SplitVec;
+use util::graph_cell::*;
 use super::lexer;
 use super::parse_errors::*;
 
@@ -21,13 +23,6 @@ macro_rules! extract {
       panic!("Tried to extract {} from {}", stringify!($kind), &$token)
     }
   );
-  (&$kind:ident, $token:expr) => (
-    if let &TokenKind::$kind(v) = $token {
-      v
-    } else {
-      panic!("Tried to extract {} from {}", stringify!($kind), $token)
-    }
-  )
 }
 
 /// Optionally parse something.
@@ -42,19 +37,20 @@ fn optional<T>(res: Result<T>) -> Result<Option<T>> {
   }
 }
 
-pub struct Parser<'a> {
+pub struct Parser<'p, 'ast: 'p> {
   filename: Arc<PathBuf>,
-  token: Token<'a>,
-  included_paths: &'a mut FxHashSet<Arc<PathBuf>>,
-  inp: &'a [u8],
-  ast: Ast,
+  token: Token<'p>,
+  included_paths: &'p mut FxHashSet<Arc<PathBuf>>,
+  inp: &'p [u8],
+  ast: GraphRefMut<'ast, Ast<'ast>>,
 }
 
-impl<'a> Parser<'a> {
+impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   fn new(
     filename: Arc<PathBuf>,
-    included_paths: &'a mut FxHashSet<Arc<PathBuf>>,
-    inp: &'a [u8]
+    included_paths: &'p mut FxHashSet<Arc<PathBuf>>,
+    inp: &'p [u8],
+    ast: GraphRefMut<'ast, Ast<'ast>>,
   )
     -> Self
   {
@@ -65,11 +61,22 @@ impl<'a> Parser<'a> {
       token,
       included_paths,
       inp,
-      ast: Ast::new(),
+      ast,
     }
   }
 
-  fn include(&mut self, filename: &str) -> Result<()> {
+  fn string_token_value(&self) -> TokenValue<Arc<str>> {
+    let kind = self.token.kind.as_str();
+    let ss = self.ast.awake_ref().shared_string(kind);
+    let span = self.token.span.clone();
+    TokenValue::new(ss, span)
+  }
+
+  fn include(
+    &mut self,
+    filename: &str,
+  ) -> Result<()>
+  {
     let filename = Arc::new(
       match self.filename.parent() {
         Some(parent) if !parent.as_os_str().is_empty()
@@ -83,49 +90,68 @@ impl<'a> Parser<'a> {
       trace!("Skipping already included file '{}'", filename.to_string_lossy());
       return Ok(());
     }
-    let sub_ast = Self::parse_file(filename, &mut self.included_paths)?;
-    self.ast.merge(sub_ast);
-    Ok(())
+    Self::parse_file(filename, &mut self.included_paths, self.ast.clone())
   }
 
-  pub fn parse(filename: &Path) -> Result<Ast> {
+  pub fn parse(filename: &Path) -> Result<Box<GraphCell<Ast<'ast>>>> {
     let mut includes: FxHashSet<_> = Default::default();
     let filename = Arc::new(filename.canonicalize()?);
     includes.insert(filename.clone());
-    Self::parse_file(filename, &mut includes)
+    let ast = Ast::new();
+    Self::parse_file(filename, &mut includes, ast.asleep_mut())?;
+    ast.awake_mut().typecheck()?;
+    Ok(ast)
   }
 
-  fn parse_file(filename: Arc<PathBuf>, includes: &mut FxHashSet<Arc<PathBuf>>)
-    -> Result<Ast>
+  fn parse_file(
+    filename: Arc<PathBuf>,
+    includes: &'p mut FxHashSet<Arc<PathBuf>>,
+    ast: GraphRefMut<'ast, Ast<'ast>>,
+  ) -> Result<()>
   {
     let mut program = String::new();
     File::open(filename.as_ref())?.read_to_string(&mut program)?;
     trace!("Loading {}", filename.to_string_lossy());
-    let mut parser = Parser::new(filename, includes, program.as_bytes());
-    parser.parse_program()?;
-    Ok(parser.into_ast())
+    let mut parser = Self::new(filename, includes, program.as_bytes(), ast);
+    parser.parse_program()
   }
 
-  pub fn parse_str(filename: PathBuf, program: &str) -> Result<Ast> {
+  pub fn parse_str(
+    filename: PathBuf,
+    program: &'p str,
+  ) -> Result<Box<GraphCell<Ast<'ast>>>>
+  {
     let mut includes = Default::default();
-    let mut parser = Parser::new(Arc::new(filename), &mut includes, program.as_bytes());
+    let ast = Ast::new();
+    let mut parser = Self::new(
+      Arc::new(filename),
+      &mut includes,
+      program.as_bytes(),
+      ast.asleep_mut(),
+    );
     parser.parse_program()?;
-    Ok(parser.into_ast())
+    ast.awake_mut().typecheck()?;
+    Ok(ast)
   }
 
-  fn into_ast(self) -> Ast {
-    self.ast
+  fn lexer_iresult(&self) -> Result<(Token<'p>, &'p [u8])> {
+    match lexer::next_token(self.inp, &self.token.span) {
+      IResult::Done(inp, token) => Ok((token, inp)),
+      IResult::Incomplete(_) => unreachable!("Lexer should not return incomplete"),
+      IResult::Error(e) => Err(Error::from_nom(e, &self.token.span)),
+    }
   }
 
   fn advance(&mut self) -> Result<()> {
-    let (token, inp) = match lexer::next_token(self.inp, &self.token.span) {
-      IResult::Done(inp, token) => (token, inp),
-      IResult::Incomplete(_) => unreachable!("Lexer should not return incomplete"),
-      IResult::Error(e) => return Err(Error::from_nom(e, &self.token.span)),
-    };
+    let (token, inp) = self.lexer_iresult()?;
     self.inp = inp;
     self.token = token;
     Ok(())
+  }
+
+  fn peek(&self) -> Result<Token> {
+    let (token, _) = self.lexer_iresult()?;
+    Ok(token)
   }
 
   /// Top level: Include | Label: (def keyword)
@@ -137,6 +163,7 @@ impl<'a> Parser<'a> {
       } else if self.token == Keyword::Include {
         self.parse_include()?
       } else if let TokenKind::Label(label) = self.token.kind {
+        let label = self.string_token_value();
         self.advance()?;
         // An item definition
         let token = self.expect(TokenMatch::Keyword)?;
@@ -165,7 +192,7 @@ impl<'a> Parser<'a> {
 
   // ===== User =====
 
-  fn parse_user(&mut self, label: &str) -> Result<()> {
+  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
     self.consume(Keyword::User)?;
     self.consume(TokenKind::Semicolon)?;
     Ok(())
@@ -173,78 +200,175 @@ impl<'a> Parser<'a> {
 
   // ===== Collectable =====
 
-  fn parse_collectable_or_group(&mut self, label: &str) -> Result<()> {
+  fn parse_collectable_or_group(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
     self.consume(Keyword::Collectable)?;
     let is_group = self.opt_consume(Keyword::Group)?;
     self.consume(TokenKind::Semicolon)?;
-    let mut group = CollectableGroup::new(label.into());
-    // Subdefs starting with 'has'
-    let subdefs_has = [
-      Self::parse_has_collectable,
-      Self::parse_has_upgrades,
-      Self::parse_has_redemptions,
-    ];
-    if self.opt_consume(Keyword::Has)? {
-      // First one can be 'has amount', after that only the above group.
-      if self.opt_consume(Keyword::Amount)? {
-        group.has_amount = true;
-      } else {
-        self.any(&subdefs_has, &mut group, true)?;
-      }
+    // Collectables support 'has upgrades', 'has redemptions', and 'property'.
+    // The first statement can optionally be 'has amount'.
+    // Groups also support 'has collectable' and 'has collectable group'.
+    // All their properties, redemptions, and upgrades are inherited
+    // by the children in those lists.
+    let mut auto_grouping = AutoGrouping::Inherit;
+    if self.token == Keyword::Has && self.peek()? == Keyword::Amount {
+      self.advance()?;
+      self.advance()?;
+      auto_grouping = AutoGrouping::ByAmount;
       self.consume(TokenKind::Semicolon)?;
     }
-    while self.opt_consume(Keyword::Has)? {
-      self.any(&subdefs_has, &mut group, true)?;
-      self.consume(TokenKind::Semicolon)?;
+    if is_group {
+      let group = self.parse_collectable_group(label)?;
+      self.ast.awake_mut().insert(group)?;
+    } else {
+      let collectable = self.parse_collectable(label)?;
+      self.ast.awake_mut().insert(collectable)?;
     }
     Ok(())
   }
 
+  fn parse_collectable_group(&mut self, label: TokenValue<Arc<str>>)
+    -> Result<CollectableGroup<'ast>>
+  {
+    let mut group = CollectableGroup::new(label, self.ast.clone());
+    //self.all([
+    //  |&mut this, &mut grp| {
+    //    let list = this.parse_has_collectable()?;
+    //  }
+    //], group, false);
+    self.consume(Keyword::Has)?;
+    optional(self.parse_has_collectable(&mut group))?;
+    Ok(group)
+  }
+
+  fn parse_collectable(&mut self, label: TokenValue<Arc<str>>)
+    -> Result<Collectable<'ast>>
+  {
+    let mut collectable = Collectable::new(label);
+    loop {
+      if self.opt_consume(Keyword::Has)? {
+        if self.opt_consume(Keyword::Redemptions)? {
+          // TODO: write these. Note: no duplicates.
+          self.parse_redemptions(&mut collectable)?;
+        } else if self.opt_consume(Keyword::Upgrades)? {
+          self.parse_upgrades(&mut collectable)?;
+        } else {
+          break;
+        }
+      } else if self.opt_consume(Keyword::Property)? {
+        //collectable.add_property(self.parse_property()?)?;
+      } else {
+        break;
+      }
+      self.expect(TokenKind::Semicolon)?;
+    }
+    Ok(collectable)
+  }
+
   /// Ident | Label (upgrades, redemptions)?
-  fn parse_inline_collectable(&mut self, group: &mut CollectableGroup) -> Result<()> {
+  fn parse_inline_collectable(
+    &mut self,
+    group: &mut CollectableGroup<'ast>,
+  ) -> Result<()>
+  {
     if self.token == TokenMatch::Identifier {
       self.advance()?;
     } else if self.token == TokenMatch::Label {
       self.advance()?;
-      self.all(&[Self::parse_has_upgrades, Self::parse_has_redemptions], group, false)?;
+      //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
     }
     Ok(())
   }
 
-  fn parse_inline_collectable_group(&mut self, group: &mut CollectableGroup) -> Result<()> {
+  fn parse_inline_collectable_group(
+    &mut self,
+    group: &mut CollectableGroup<'ast>,
+  ) -> Result<()>
+  {
     self.consume(TokenMatch::Identifier)?;
     Ok(())
   }
 
-  fn parse_has_collectable(&mut self, group: &mut CollectableGroup) -> Result<()> {
+  fn parse_has_collectable(
+    &mut self,
+    group: &mut CollectableGroup<'ast>,
+  ) -> Result<()>
+  {
     self.consume(Keyword::Collectable)?;
     let parser = if self.opt_consume(Keyword::Group)? {
       Self::parse_inline_collectable_group
     } else {
       Self::parse_inline_collectable
     };
-    self.parse_single_or_list(parser, group)?;
+    // TODO: Also allow a single ident?
+    self.parse_bracketed_list(parser, group)?;
+    self.consume(TokenKind::Semicolon)?;
     Ok(())
   }
 
-  fn parse_has_upgrades(&mut self, container: &mut CollectableGroup) -> Result<()> {
+  fn parse_upgrades(
+    &mut self,
+    container: &mut Collectable<'ast>,
+  ) -> Result<()>
+  {
     self.consume(Keyword::Upgrades)?;
     Ok(())
   }
 
-  fn parse_has_redemptions(&mut self, container: &mut CollectableGroup) -> Result<()> {
+  fn parse_redemptions(
+    &mut self,
+    container: &mut Collectable<'ast>,
+  ) -> Result<()>
+  {
     self.consume(Keyword::Redemptions)?;
     Ok(())
   }
 
   // ===== Event =====
 
-  fn parse_event(&mut self, label: &str) -> Result<()> {
+  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
     self.consume(Keyword::Event)?;
     Ok(())
   }
 
   // ===== Variables =====
+/*
+  fn parse_property(&mut self) -> Result<Property> {
+    self.consume(Keyword::Property)?;
+    //let ty = self.parse_full_type_name()?;
+  }
+
+  fn parse_full_type_name(&mut self) -> Result<TypeRef> {
+    let token = self.take(TokenKind::Keyword)?;
+    let kw = extract!(Keyword, token.kind);
+    Ok(match kw {
+      Keyword::Switch => TypeRef::Primitive(PrimitiveType::Switch),
+      Keyword::Text => TypeRef::Primitive(PrimitiveType::Text),
+      Keyword::Localized => {
+        self.opt_consume(Keyword::Text)?;
+        TypeRef::Primitive(PrimitiveType::LocalizedText)
+      }
+      Keyword::Integer => TypeRef::Primitive(PrimitiveType::Integer),
+      Keyword::Decimal => TypeRef::Primitive(PrimitiveType::Decimal),
+      Keyword::Datetime => TypeRef::Primitive(PrimitiveType::DateTime),
+      Keyword::Timespan => TypeRef::Primitive(PrimitiveType::TimeSpan),
+      Keyword::Map => {
+        if self.token == TokenMatch::Identifier {
+          let tv = self.string_token_value();
+          self.advance()?;
+          TypeRef::Custom(ItemRef::new(tv))
+        } else {
+          TypeRef::Primitive(PrimitiveType::Map)
+        }
+      }
+      Keyword::Array => ,
+      Keyword::Remote => (),
+      Keyword::User => (),
+      Keyword::Collectable => (),
+      Keyword::Event => (),
+      Keyword::Function => (),
+    })
+  }
+*/
 
   // ===== General =====
 
@@ -291,7 +415,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Move to the next token, returning the current if it matches.
-  fn take<T: PartialEq<Token<'a>> + Debug>(&mut self, t: T) -> Result<Token<'a>> {
+  fn take<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<Token<'p>> {
     if &t == &self.token {
       let token = self.token.clone();
       self.advance()?;
@@ -302,7 +426,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Return the current token if it matches, otherwise error. Don't advance.
-  fn expect<T: PartialEq<Token<'a>> + Debug>(&mut self, t: T) -> Result<Token<'a>> {
+  fn expect<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<Token<'p>> {
     if &t == &self.token {
       Ok(self.token.clone())
     } else {
@@ -311,7 +435,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Move to the next token if the current matches, otherwise error.
-  fn consume<T: PartialEq<Token<'a>> + Debug>(&mut self, t: T) -> Result<()> {
+  fn consume<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<()> {
     if &t == &self.token {
       self.advance()?;
       Ok(())
@@ -321,7 +445,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Move to the next token if the current matches, otherwise false.
-  fn opt_consume<T: PartialEq<Token<'a>> + Debug>(&mut self, t: T) -> Result<bool> {
+  fn opt_consume<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<bool> {
     if &t == &self.token {
       self.advance()?;
       Ok(true)

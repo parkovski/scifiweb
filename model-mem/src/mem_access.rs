@@ -165,7 +165,7 @@ impl<'a> MessageThreadAccessor<'a> for MemoryAccessor {
       .and_then(move |thread| {
         this.mailbox_cache.write(move |result| {
           match result.unpoisoned().get_mailbox_by_id_mut(mailbox_id) {
-            Some(mut mailbox) => mailbox.thread_ids_mut().push(thread.id()),
+            Some(mailbox) => mailbox.thread_ids_mut().push(thread.id()),
             None => {
               debug!(
                 "Thread {} still exists even though mailbox was not found",
