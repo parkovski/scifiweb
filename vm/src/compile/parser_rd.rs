@@ -99,7 +99,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     includes.insert(filename.clone());
     let ast = Ast::new();
     Self::parse_file(filename, &mut includes, ast.asleep_mut())?;
-    ast.awake_mut().typecheck()?;
+    ast.awake().typecheck()?;
     Ok(ast)
   }
 
@@ -130,7 +130,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       ast.asleep_mut(),
     );
     parser.parse_program()?;
-    ast.awake_mut().typecheck()?;
+    ast.awake().typecheck()?;
     Ok(ast)
   }
 
@@ -271,8 +271,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   ) -> Result<()>
   {
     if self.token == TokenMatch::Identifier {
+      group.insert_ref_mut(ItemRefMut::new(self.string_token_value()))?;
       self.advance()?;
     } else if self.token == TokenMatch::Label {
+      //group.insert_ref_mut(ItemRefMut::new(self.string_token_value()))?;
       self.advance()?;
       //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
     }

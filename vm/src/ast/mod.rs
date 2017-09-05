@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::default::Default;
 use std::fmt::{Debug, Display};
 use fxhash::FxHashMap;
-use util::{SharedStrings, InsertUnique};
+use util::{SharedStrings, InsertUnique, InsertGraphCell};
 use util::graph_cell::*;
 use compile::{TokenSpan, TokenValue};
 
@@ -17,7 +17,13 @@ use self::errors::*;
 // =====
 
 pub trait Named: Debug + Display {
+  /// The name of the item, which must be unique
+  /// among its type in its scope.
   fn name(&self) -> &str;
+
+  /// The item type name, e.g. "collectable" or "variable".
+  /// This can be an empty string, in which case
+  /// only the name is shown.
   fn item_name(&self) -> &'static str;
 }
 
@@ -39,78 +45,61 @@ pub trait Owner<'a, T: SourceItem + 'a> {
   fn find(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
 }
 
-pub trait RefOwner<'a, T, O>
-where
-  T: SourceItem + 'a,
-  O: Owner<'a, T> + Debug + 'a,
-{
-  fn insert(&mut self, r: ItemRef<'a, T, O>) -> Result<()>;
+pub trait RefOwner<'a, T: SourceItem + 'a> {
+  fn insert_ref(&mut self, r: ItemRef<'a, T>) -> Result<()>;
   fn has_ref(&self, name: &str) -> bool;
+}
+
+pub trait RefMutOwner<'a, T: SourceItem + 'a> {
+  fn insert_ref_mut(&mut self, r: ItemRefMut<'a, T>) -> Result<()>;
+  fn has_ref_mut(&self, name: &str) -> bool;
 }
 
 // =====
 
-#[derive(Debug, Clone)]
-pub struct ItemRef<'a, T, O>
-where
-  T: SourceItem + 'a,
-  O: Owner<'a, T> + Debug + 'a,
-{
+#[derive(Debug)]
+pub struct ItemRef<'a, T: SourceItem + 'a> {
   name: TokenValue<Arc<str>>,
-  owner: GraphRef<'a, O>,
   item: Option<GraphRef<'a, T>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ItemRefMut<'a, T, O>
-where
-  T: SourceItem + 'a,
-  O: Owner<'a, T> + Debug + 'a,
-{
+#[derive(Debug)]
+pub struct ItemRefMut<'a, T: SourceItem + 'a> {
   name: TokenValue<Arc<str>>,
-  owner: GraphRef<'a, O>,
   item: Option<GraphRefMut<'a, T>>,
-}
-
-impl<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a> ItemRef<'a, T, O> {
-  pub fn new(name: TokenValue<Arc<str>>, owner: GraphRef<'a, O>) -> Self {
-    ItemRef {
-      name,
-      owner,
-      item: None,
-    }
-  }
-
-  pub fn item(&self) -> Option<GraphRef<'a, T>> {
-    self.item
-  }
-}
-
-impl<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a> ItemRefMut<'a, T, O> {
-  pub fn new(name: TokenValue<Arc<str>>, owner: GraphRef<'a, O>) -> Self {
-    ItemRefMut {
-      name,
-      owner,
-      item: None,
-    }
-  }
-
-  pub fn item(&self) -> Option<GraphRef<'a, T>> {
-    self.item.map(|r| r.asleep_ref())
-  }
-
-  pub fn item_mut(&mut self) -> Option<GraphRefMut<'a, T>> {
-    self.item
-  }
 }
 
 macro_rules! item_ref_impls {
   ($t:ident, ($($conv:tt)*)) => (
-    impl<'a, T, O> Named for $t<'a, T, O>
-    where
-      T: SourceItem + 'a,
-      O: Owner<'a, T> + Debug + 'a,
-    {
+    impl<'a, T: SourceItem + 'a> $t<'a, T> {
+      pub fn new(name: TokenValue<Arc<str>>) -> Self {
+        $t {
+          name,
+          item: None,
+        }
+      }
+
+      pub fn resolve<O>(&mut self, owner: &O) -> Result<()>
+      where O: Owner<'a, T> + Debug + 'a
+      {
+        match owner.find(&self.name) {
+          Some(r) => {
+            self.item = Some(r $($conv)*);
+            Ok(())
+          }
+          None => Err(ErrorKind::NotDefined(
+            self.name.value().clone(),
+            "ref" // T::BASE_TYPE
+          ).into()),
+        }
+      }
+
+      pub fn source_name(&self) -> &TokenValue<Arc<str>> {
+        &self.name
+      }
+    }
+
+    impl<'a, T: SourceItem + 'a> Named for $t<'a, T> {
       fn name(&self) -> &str {
         &self.name
       }
@@ -120,37 +109,35 @@ macro_rules! item_ref_impls {
       }
     }
 
-    named_display!((<'a, T: SourceItem + 'a, O: Owner<'a, T> + Debug + 'a>)$t(<'a, T, O>));
-
-    impl<'a, T, O> SourceItem for $t<'a, T, O>
-    where
-      T: SourceItem + 'a,
-      O: Owner<'a, T> + Debug + 'a,
-    {
-      fn source_name(&self) -> &TokenValue<Arc<str>> {
-        &self.name
-      }
-
-      fn span(&self) -> &TokenSpan {
-        self.name.span()
-      }
-
-      fn resolve(&mut self) -> Result<()> {
-        match self.owner.awake().find(&self.name) {
-          Some(item) => Ok(self.item = Some(item $($conv)*)),
-          None => Err(ErrorKind::NotDefined(self.name.value().clone(), "ref").into()),
-        }
-      }
-
-      fn typecheck(&mut self) -> Result<()> {
-        Ok(())
-      }
-    }
+    named_display!((<'a, T: SourceItem + 'a>)$t(<'a, T>));
   );
 }
 
 item_ref_impls!(ItemRef, (.asleep_ref()));
 item_ref_impls!(ItemRefMut, ());
+
+impl<'a, T: SourceItem + 'a> ItemRef<'a, T> {
+  pub fn item(&self) -> Option<GraphRef<'a, T>> {
+    self.item
+  }
+}
+
+impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
+  pub fn item(&self) -> Option<GraphRef<'a, T>> {
+    self.item.map(|r| r.asleep_ref())
+  }
+
+  pub fn item_mut(&mut self) -> Option<GraphRefMut<'a, T>> {
+    self.item
+  }
+
+  pub fn into_item_ref(self) -> ItemRef<'a, T> {
+    ItemRef {
+      name: self.name,
+      item: self.item.map(|i| i.asleep_ref()),
+    }
+  }
+}
 
 // =====
 
@@ -174,16 +161,16 @@ impl<'a> Ast<'a> {
     self.strings.get(s)
   }
 
-  fn resolution_step<F>(&mut self, step: F) -> Result<()>
+  fn resolution_step<F>(&self, step: F) -> Result<()>
   where F: Fn(&mut (SourceItem + 'a)) -> Result<()>
   {
-    for ty in self.types.values_mut() {
+    for ty in self.types.values() {
       (step)(&mut *ty.awake_mut())?;
     }
     Ok(())
   }
 
-  pub fn typecheck(&mut self) -> Result<()> {
+  pub fn typecheck(&self) -> Result<()> {
     self.resolution_step(SourceItem::resolve)?;
     self.resolution_step(SourceItem::typecheck)
   }
@@ -192,14 +179,12 @@ impl<'a> Ast<'a> {
 impl<'a> Owner<'a, Type<'a>> for Ast<'a> {
   fn insert(&mut self, ty: Type<'a>) -> Result<GraphRefMut<'a, Type<'a>>> {
     let name = ty.source_name().value().clone();
-    let gc = GraphCell::new(ty);
-    let r = gc.asleep_mut();
     self.types
-      .insert_unique(name, gc)
-      .map(|_| r)
-      .map_err(
-        |(name, ty)| ErrorKind::DuplicateDefinition(name, ty.awake().item_name()).into()
-      )
+      .insert_graph_cell(name, ty)
+      .map_err(|ty| ErrorKind::DuplicateDefinition(
+        ty.source_name().value().clone(),
+        ty.item_name()
+      ).into())
   }
 
   fn find(&self, name: &str) -> Option<GraphRefMut<'a, Type<'a>>> {
@@ -213,12 +198,14 @@ where
 {
   fn insert(&mut self, ty: T) -> Result<GraphRefMut<'a, T>> {
     let name = ty.source_name().value().clone();
-    let cell = GraphCell::new(Type::Custom(Box::new(ty)));
-    let gr = cell.asleep_mut();
-    match self.types.insert_unique(name, cell) {
-      Ok(()) => Ok(gr.map(|r| T::cast_mut(r.as_custom_mut().unwrap()))),
-      Err((name, _)) => Err(ErrorKind::DuplicateDefinition(name, "type").into())
-    }
+    let ty = Type::Custom(Box::new(ty));
+    self.types
+      .insert_graph_cell(name, ty)
+      .map(|gr| gr.map(|r| T::cast_mut(r.as_custom_mut().unwrap())))
+      .map_err(|ty| ErrorKind::DuplicateDefinition(
+        ty.source_name().value().clone(),
+        ty.item_name(),
+      ).into())
   }
 
   /// This uses the mutable reference, so no other

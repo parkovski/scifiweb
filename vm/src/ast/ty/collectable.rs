@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use fxhash::FxHashMap;
 use util::graph_cell::*;
+use util::{InsertUnique, InsertGraphCell};
 use compile::{TokenSpan, TokenValue};
 use ast::var::Property;
 use ast::errors::*;
@@ -23,8 +24,8 @@ pub struct CollectableGroup<'a> {
   name: TokenValue<Arc<str>>,
   ast: GraphRefMut<'a, Ast<'a>>,
   auto_grouping: AutoGrouping,
-  properties: FxHashMap<Arc<str>, Property<'a>>,
-  collectables: FxHashMap<Arc<str>, ItemRef<'a, Collectable<'a>, Ast<'a>>>,
+  properties: FxHashMap<Arc<str>, GraphCell<Property<'a>>>,
+  collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
 }
 
 impl_name_traits!((<'a>) CollectableGroup (<'a>));
@@ -87,6 +88,9 @@ impl<'a> SourceItem for CollectableGroup<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
+    for c in self.collectables.values_mut() {
+      c.resolve(&*self.ast.awake_ref())?;
+    }
     Ok(())
   }
 
@@ -118,6 +122,33 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
   }
 }
 
+impl<'a> Owner<'a, Property<'a>> for CollectableGroup<'a> {
+  fn insert(&mut self, p: Property<'a>) -> Result<GraphRefMut<'a, Property<'a>>> {
+    self.properties
+      .insert_graph_cell(p.source_name().value().clone(), p)
+      .map_err(|p| ErrorKind::DuplicateDefinition(
+        p.source_name().value().clone(),
+        "property"
+      ).into())
+  }
+
+  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+    self.properties.get(name).map(|p| p.asleep_mut())
+  }
+}
+
+impl<'a> RefMutOwner<'a, Collectable<'a>> for CollectableGroup<'a> {
+  fn insert_ref_mut(&mut self, r: ItemRefMut<'a, Collectable<'a>>) -> Result<()> {
+    self.collectables
+      .insert_unique(r.source_name().value().clone(), r)
+      .map_err(|(name, _)| ErrorKind::DuplicateDefinition(name, "collectable").into())
+  }
+
+  fn has_ref_mut(&self, name: &str) -> bool {
+    self.collectables.contains_key(name)
+  }
+}
+
 #[derive(Debug)]
 pub struct Collectable<'a> {
   name: TokenValue<Arc<str>>,
@@ -145,7 +176,7 @@ impl<'a> Collectable<'a> {
     }
   }
 /*
-  pub fn set_parent(&mut self, parent: ItemRef<'a, CollectableGroup<'a, R>, Ast<'a, R>>) -> Result<()> {
+  pub fn set_parent(&mut self, parent: ItemRef<'a, CollectableGroup<'a>>) -> Result<()> {
     if let Some(ref p) = self.parent {
       if p.name() == parent.name() {
         return Ok(())
@@ -202,5 +233,20 @@ impl<'a> CustomType<'a> for Collectable<'a> {
     //self.properties.get(name)
     //  .or_else(|| self.parent.map(|p| p.properties.get(name)))
     None
+  }
+}
+
+impl<'a> Owner<'a, Property<'a>> for Collectable<'a> {
+  fn insert(&mut self, p: Property<'a>) -> Result<GraphRefMut<'a, Property<'a>>> {
+    self.properties
+      .insert_graph_cell(p.source_name().value().clone(), p)
+      .map_err(|p| ErrorKind::DuplicateDefinition(
+        p.source_name().value().clone(),
+        "property"
+      ).into())
+  }
+
+  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+    self.properties.get(name).map(|r| r.asleep_mut())
   }
 }

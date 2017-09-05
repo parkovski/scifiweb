@@ -19,11 +19,12 @@ use std::sync::Arc;
 use std::cell::RefCell;
 use std::default::Default;
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::hash_map::{HashMap, Entry};
 use std::hash::{Hash, BuildHasher};
 use fxhash::FxHashSet;
 use futures::Future;
 use future::SFFuture;
+use self::graph_cell::{GraphCell, GraphRefMut};
 
 pub fn id<T>(t: T) -> T {
   t
@@ -112,6 +113,25 @@ impl<K: Hash + Eq, V, H: BuildHasher> InsertUnique<K, V> for HashMap<K, V, H> {
     } else {
       self.insert(key, value);
       Ok(())
+    }
+  }
+}
+
+pub trait InsertGraphCell<K, V> {
+  fn insert_graph_cell<'a>(&mut self, key: K, value: V)
+    -> Result<GraphRefMut<'a, V>, V>;
+}
+
+impl<K: Hash + Eq, V, H: BuildHasher> InsertGraphCell<K, V>
+for HashMap<K, GraphCell<V>, H> {
+  fn insert_graph_cell<'a>(&mut self, key: K, value: V)
+    -> Result<GraphRefMut<'a, V>, V>
+  {
+    let entry = self.entry(key);
+    if let Entry::Vacant(e) = entry {
+      Ok(e.insert(GraphCell::new(value)).asleep_mut())
+    } else {
+      Err(value)
     }
   }
 }

@@ -10,13 +10,13 @@ pub struct Var(u32);
 #[derive(Debug)]
 pub struct Property<'a> {
   name: TokenValue<Arc<str>>,
-  ty: ItemRef<'a, Type<'a>, Ast<'a>>,
+  ty: ItemRef<'a, Type<'a>>,
 }
 
 impl<'a> Property<'a> {
   pub fn new(
     name: TokenValue<Arc<str>>,
-    ty: ItemRef<'a, Type<'a>, Ast<'a>>,
+    ty: ItemRef<'a, Type<'a>>,
   ) -> Self
   {
     Property { name, ty }
