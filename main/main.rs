@@ -7,8 +7,6 @@ extern crate serde_derive;
 extern crate log;
 //extern crate ctrlc;
 extern crate docopt;
-//#[macro_use]
-//extern crate error_chain;
 extern crate scifi_model as model;
 extern crate scifi_model_mem as model_mem;
 extern crate scifi_http_server as http_server;
@@ -18,16 +16,17 @@ extern crate scifi_util as util;
 mod config;
 
 use std::path::Path;
+use std::default::Default;
 use docopt::Docopt;
 use log::LogLevelFilter;
-use self::config::Config;
 use model_mem::MemoryAccessor;
+use self::config::{Config, DEFAULT_CONFIG_PATH};
 
 const USAGE: &'static str = "
 SciFiWeb Game Management Server
 
 Usage:
-  scifiweb [-c <config.json>]
+  scifiweb [options]
   scifiweb build <input.scifi> [options]
   scifiweb console
   scifiweb --help
@@ -90,6 +89,7 @@ struct Args {
   flag_output: Option<String>,
   flag_target: Option<Target>,
   flag_log: Option<LogLevel>,
+  arg_input_scifi: Option<String>,
 }
 
 fn main() {
@@ -97,11 +97,19 @@ fn main() {
     .and_then(|d| d.deserialize())
     .unwrap_or_else(|e| e.exit());
 
-  let log_level = args.flag_log.unwrap_or(default_log_level()).into_log_type();
-  let _ = util::logger::init(&["scifi"], log_level);
+  let mut warn_default_config = false;
+  let config_path = args.flag_config.as_ref().map(String::as_str).unwrap_or(DEFAULT_CONFIG_PATH);
+  let config = Config::read(Path::new(config_path)).unwrap_or_else(|_| {
+    warn_default_config = true;
+    Config::default()
+  });
 
-  let config =
-    Config::read(Path::new("./config/example_config.json")).expect("Couldn't read config");
+  let log_level = args.flag_log.unwrap_or(default_log_level()).into_log_type();
+  let _ = util::logger::init(&["scifi"], log_level, &config.time_format);
+
+  if warn_default_config {
+    warn!("Couldn't read '{}', using default config.", config_path);
+  }
 
   if args.cmd_build {
     match vm::compile_graph(Path::new("./vm/dot_scifi/simple.scifi")) {

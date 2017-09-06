@@ -8,6 +8,7 @@ extern crate futures;
 extern crate log;
 extern crate termcolor;
 extern crate fxhash;
+extern crate chrono;
 
 pub mod future;
 pub mod graph_cell;

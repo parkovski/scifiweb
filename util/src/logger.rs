@@ -1,29 +1,36 @@
-use std::time::Instant;
 use std::io::Write;
 use log::{set_logger, Log, LogLevel, LogLevelFilter, LogMetadata, LogRecord, MaxLogLevelFilter};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use chrono::Local;
 
-pub fn init(prefixes: &'static [&'static str], level: LogLevelFilter)
-  -> Result<(), ::log::SetLoggerError>
+pub fn init(
+  prefixes: &'static [&'static str],
+  level: LogLevelFilter,
+  time_fmt: &str,
+) -> Result<(), ::log::SetLoggerError>
 {
   set_logger(|max_level| {
     max_level.set(level);
-    Box::new(Logger::new(max_level, prefixes))
+    Box::new(Logger::new(max_level, prefixes, time_fmt.into()))
   })
 }
 
 struct Logger {
-  start_time: Instant,
   max_level: MaxLogLevelFilter,
   prefixes: &'static [&'static str],
+  time_fmt: String,
 }
 
 impl Logger {
-  pub fn new(max_level: MaxLogLevelFilter, prefixes: &'static [&'static str]) -> Self {
+  pub fn new(
+    max_level: MaxLogLevelFilter,
+    prefixes: &'static [&'static str],
+    time_fmt: String,
+  ) -> Self {
     Logger {
-      start_time: Instant::now(),
       max_level,
       prefixes,
+      time_fmt,
     }
   }
 
@@ -47,6 +54,7 @@ impl Log for Logger {
     if !self.enabled(record.metadata()) || !self.filter(record) {
       return;
     }
+    let time = Local::now();
     let mut stderr = StandardStream::stderr(ColorChoice::Always);
     let (color, title) = match record.metadata().level() {
       LogLevel::Debug => (Color::Green, "debug"),
@@ -61,17 +69,12 @@ impl Log for Logger {
     stderr.reset();
     write!(
       &mut stderr,
-      "{}s",
-      (Instant::now() - self.start_time).as_secs()
+      "{}",
+      time.format(&self.time_fmt),
     );
-    stderr.set_color(color_spec.set_fg(Some(color)).set_bold(true));
-    write!(&mut stderr, "]:");
+    stderr.set_color(color_spec.set_fg(Some(color.clone())).set_bold(true));
+    write!(&mut stderr, "]: {}:", record.location().module_path());
     stderr.reset();
-    writeln!(
-      &mut stderr,
-      " ({}): {}",
-      record.location().module_path(),
-      record.args()
-    );
+    writeln!(&mut stderr, " {}", record.args());
   }
 }
