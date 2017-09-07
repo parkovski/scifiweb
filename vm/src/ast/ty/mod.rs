@@ -7,8 +7,16 @@ use super::var::Property;
 use super::errors::*;
 use super::*;
 
+mod array;
+//mod callable;
 mod collectable;
+//mod object;
+//mod remote;
+mod user;
+
+pub use self::array::*;
 pub use self::collectable::*;
+pub use self::user::*;
 
 /// Primitive types usable as-is.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
