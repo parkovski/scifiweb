@@ -1,7 +1,7 @@
 #include 'commonCards.scifi';
 #include 'rareCards.scifi';
 
-Player: user;
+Player user:
   has collectable Level with amount range 1 to 10;
   has collectable Coin;
   has collectable Gem;
@@ -10,28 +10,32 @@ Player: user;
   # be grouped together as one item, but you can
   # still set an amount range here.
   has collectable group Chest with amount max 4;
+end;
 
-Level: collectable;
+Level collectable:
   has amount;
   has upgrades with cost [
     Coin x 100 * 2 ^ (amount - 1) for amount max 4,
     Coin x 1500 * (amount - 4) for amount min 5 max 8,
     Coin x 15000 for amount 9,
   ];
+end;
 
-Coin: collectable;
+Coin collectable:
   has amount;
   has redemptions with amount [
     100 for cost Gem x 10,
     500 for cost Gem x 45,
     1000 for cost Gem x 80,
   ];
+end;
 
-CoinRewards: map;
+CoinRewards object:
   amount of collectable Coin
   for collectable Level = 10 + 2 * amount;
+end;
 
-Foobar: map;
+Foobar object:
   property test of collectable Foo
   for collectable Bar
   with [
@@ -39,14 +43,16 @@ Foobar: map;
     'Goodbye' for amount 2,
   ]
   or = 'I don''t know';
+end;
 
-Gem: collectable;
+Gem collectable:
   # These redemptions are defined by an adapter
   # that looks up the cost in the store the user
   # is logged in to.
   has redemptions for currency;
+end;
 
-Chest: collectable group;
+Chest collectable group:
   property waitingToOpen switch = off;
   has collectable [
     SmallChest:
@@ -54,8 +60,9 @@ Chest: collectable group;
     LargeChest:
       has redemptions with amount 1 for cost Gem x 500;
   ];
+end;
 
-OpenSmallChest: event;
+OpenSmallChest event:
   params(chest collectable SmallChest);
   authorize user chest.owner;
   assert !chest.waitingToOpen;
@@ -67,8 +74,9 @@ OpenSmallChest: event;
   );
   award random SmallChestRewards to chest.owner;
   award -chest;
+end;
 
-OpenLargeChest: event;
+OpenLargeChest event:
   params(chest collectable LargeChest);
   authorize user chest.owner;
   assert !chest.waitingToOpen;
@@ -80,8 +88,9 @@ OpenLargeChest: event;
   );
   award random LargeChestRewards to chest.owner;
   award -chest;
+end;
 
-SmallChestRewards: random;
+SmallChestRewards random:
   group distribution min 2 max 4;
   amount random range 10 to 15;
   weighted for collectable group [
@@ -90,8 +99,9 @@ SmallChestRewards: random;
     1.5% for EpicCards,
     0.5% for LegendaryCards,
   ];
+end;
 
-LargeChestRewards: random;
+LargeChestRewards random:
   group distribution min 4 max 7;
   amount random range 30 to 35;
   weighted for collectable group [
@@ -100,15 +110,17 @@ LargeChestRewards: random;
     13% for EpicCards,
     2% for LegendaryCards,
   ];
+end;
 
-WinnerChest: random;
+WinnerChest random:
   amount 1;
   weighted for collectable [
     70% for SmallChest,
     30% for LargeChest,
   ];
+end;
 
-PlayerWantsGame: event;
+PlayerWantsGame event:
   params(player user Player);
   authorize user;
   # TODO: How to model these to avoid race conditions?
@@ -121,17 +133,21 @@ PlayerWantsGame: event;
     set server = find gameserver with switch accepting = on;
     notify server of StartComputerPlayerGame with player;
   );
+end;
 
-StartGame: event for gameserver;
+StartGame event for gameserver:
   params(p1 user Player, p2 user Player);
+end;
 
-StartComputerPlayerGame: event for gameserver;
+StartComputerPlayerGame event for gameserver:
   params(player user Player);
+end;
 
-EndGame: event;
+EndGame event:
   params(game gameresult);
   authorize gameserver;
   award random WinnerChest to game.winners;
   award map CoinRewards to game.winners;
   award collectable Level x 1 to game.winners;
   award -collectable Level x 1 to game.losers;
+end;

@@ -1,18 +1,21 @@
-Chest: collectable group;
+Chest collectable group:
   property canOpen switch = off;
+  has collectable
   has collectable [
-    SmallChest: has redemptions;
-    LargeChest: has redemptions;
+    SmallChest: has redemptions; end;
+    LargeChest: has redemptions; end;
   ];
+end;
 
-BeginOpenChest: event;
+BeginOpenChest event:
   params(chest collectable group Chest);
   authorize user chest.owner;
   assert !find event BeginOpenChest for user chest.owner;
   timer 3 hours;
   set chest.canOpen = on;
+end;
 
-OpenChest: event;
+OpenChest event:
   params(chest collectable group Chest);
   authorize user chest.owner;
   option(
@@ -21,3 +24,4 @@ OpenChest: event;
     cost Coin x 1000;
   );
   award -chest;
+end;

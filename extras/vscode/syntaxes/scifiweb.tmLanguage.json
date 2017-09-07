@@ -17,8 +17,8 @@
       "name": "constant.numeric.float.scifiweb"
     },
     {
-      "match": "(?<![\\w\\d_])[\\w_][\\w\\d_]*:",
-      "name": "support.function.label.scifiweb"
+      "match": "(?<![\\w\\d_])\\`[\\w\\d_]+",
+      "name": "support.function.escaped_identifier.scifiweb"
     },
     {
       "begin": "'",
@@ -41,25 +41,20 @@
       ]
     },
     {
-      "name": "comment.line.double-slash.cs",
+      "name": "comment.line.hash.scifiweb",
       "begin": "#",
-      "beginCaptures": {
-        "0": {
-          "name": "punctuation.definition.comment.cs"
-        }
-      },
       "end": "(?=$)"
     },
     {
-      "match": "\\b(switch|text|localized|gameserver|admin|datetime|gameresult)\\b",
+      "match": "\\b(switch|text|integer|decimal|localized|datetime|timespan)\\b",
       "name": "keyword.type.scifiweb"
     },
     {
-      "match": "\\b(random|user|group|collectable|event|map)\\b",
+      "match": "\\b(object|array|remote|user|group|collectable|event|function)\\b",
       "name": "keyword.control.scifiweb"
     },
     {
-      "match": "\\b(on|off|seconds|minutes|hours|days|weeks|months)\\b",
+      "match": "\\b(on|off|seconds|minutes|hours|days|weeks)\\b",
       "name": "constant.language.scifiweb"
     },
     {
@@ -71,7 +66,7 @@
       "name": "keyword.object.type.scifiweb"
     },
     {
-      "match": "\\b(params|assert|authorize|award|timer|set|find|notify|option)\\b",
+      "match": "\\b(params|assert|authorize|award|timer|set|find|notify|option|random|if|else|do|end)\\b",
       "name": "keyword.command.scifiweb"
     },
     {

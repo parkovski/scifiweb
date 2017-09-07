@@ -1,22 +1,25 @@
-Card: collectable group;
+Card collectable group:
   has amount;
   has collectable group [CommonCard, RareCard];
+end;
 
-CommonCard: collectable group;
+CommonCard collectable group:
   has collectable [
     Bomb, Bow, Sword
   ];
+end;
 
-RareCard: collectable group;
+RareCard collectable group:
   has collectable [
     FireBow, FreezeRay
   ];
+end;
 
 # Common cards
-Bomb: collectable;
-Bow: collectable;
-Sword: collectable;
+Bomb collectable;
+Bow collectable;
+Sword collectable;
 
 # Rare cards
-FireBow: collectable;
-FreezeRay: collectable;
+FireBow collectable;
+FreezeRay collectable;

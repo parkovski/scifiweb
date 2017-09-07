@@ -1,11 +1,11 @@
 {
   "name": "scifiweb-vscode-grammar",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "publisher": "parkovski",
   "engines": {
-    "vscode": "^1.14.0"
+    "vscode": "^1.15.0"
   },
-  "description": "",
+  "description": "SciFiWeb game definition langauge support",
   "author": "parkovski",
   "license": "ISC",
   "displayName": "SciFiWeb Language",
