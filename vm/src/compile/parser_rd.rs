@@ -185,7 +185,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
           }?;
           self.consume(Keyword::End)?;
           self.consume(TokenKind::Semicolon)?;
-          self.ast.awake_mut().insert(ty);
+          self.ast.awake_mut().insert(ty)?;
         }
       } else {
         return self.e_unexpected();
