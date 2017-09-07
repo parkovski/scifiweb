@@ -2,8 +2,7 @@ use std::sync::Arc;
 use fxhash::FxHashMap;
 use util::graph_cell::*;
 use compile::{TokenSpan, TokenValue};
-use ast::var::Property;
-use ast::errors::*;
+use ast::var::Variable;
 use super::*;
 
 /// Group membership default. An `Allow` group
@@ -121,7 +120,7 @@ impl<'a> CustomType<'a> for UserGroup<'a> {
 #[derive(Debug)]
 pub struct User<'a> {
   name: TokenValue<Arc<str>>,
-  properties: FxHashMap<Arc<str>, GraphCell<Property<'a>>>,
+  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
 }
 
 impl_name_traits!((<'a>) User (<'a>));
@@ -164,7 +163,7 @@ impl<'a> CustomType<'a> for User<'a> {
     TC_NOTIFY_RECEIVER | TC_PROPERTIES
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Property<'a>>> {
+  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
     self.properties.get(name).map(|p| p.asleep())
   }
 }

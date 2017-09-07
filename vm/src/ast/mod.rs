@@ -349,5 +349,5 @@ pub use self::errors::{
   Error as AstError,
   ErrorKind as AstErrorKind,
   Result as AstResult,
-  ResultExt as ResultExt,
+  ResultExt as AstResultExt,
 };

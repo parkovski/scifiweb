@@ -3,8 +3,7 @@ use fxhash::FxHashMap;
 use util::graph_cell::*;
 use util::{InsertUnique, InsertGraphCell};
 use compile::{TokenSpan, TokenValue};
-use ast::var::Property;
-use ast::errors::*;
+use ast::var::Variable;
 use super::*;
 
 /// When auto grouping is on, you can only own
@@ -26,7 +25,7 @@ pub struct CollectableGroup<'a> {
   //self_ref: GraphRef<'a, Self>,
   auto_grouping: AutoGrouping,
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
-  properties: FxHashMap<Arc<str>, GraphCell<Property<'a>>>,
+  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
   collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
 }
 
@@ -88,7 +87,7 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
     TC_PROPERTIES
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Property<'a>>> {
+  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
     self.properties.get(name).map(|p| p.asleep())
   }
 
@@ -107,8 +106,8 @@ impl<'a> SubType<'a, CollectableGroup<'a>> for CollectableGroup<'a> {
   }
 }
 
-impl<'a> Owner<'a, Property<'a>> for CollectableGroup<'a> {
-  fn insert(&mut self, p: Property<'a>) -> Result<GraphRefMut<'a, Property<'a>>> {
+impl<'a> Owner<'a, Variable<'a>> for CollectableGroup<'a> {
+  fn insert(&mut self, p: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     self.properties
       .insert_graph_cell(p.source_name().value().clone(), p)
       .map_err(|p| ErrorKind::DuplicateDefinition(
@@ -117,7 +116,7 @@ impl<'a> Owner<'a, Property<'a>> for CollectableGroup<'a> {
       ).into())
   }
 
-  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
     self.properties.get(name).map(|p| p.asleep_mut())
   }
 }
@@ -139,7 +138,7 @@ pub struct Collectable<'a> {
   name: TokenValue<Arc<str>>,
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
   auto_grouping: AutoGrouping,
-  properties: FxHashMap<Arc<str>, GraphCell<Property<'a>>>,
+  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
   // upgrades
   // redemptions
 }
@@ -206,7 +205,7 @@ impl<'a> CustomType<'a> for Collectable<'a> {
     None
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Property<'a>>> {
+  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
     //self.properties.get(name)
     //  .or_else(|| self.parent.map(|p| p.properties.get(name)))
     None
@@ -223,8 +222,8 @@ impl<'a> SubType<'a, CollectableGroup<'a>> for Collectable<'a> {
   }
 }
 
-impl<'a> Owner<'a, Property<'a>> for Collectable<'a> {
-  fn insert(&mut self, p: Property<'a>) -> Result<GraphRefMut<'a, Property<'a>>> {
+impl<'a> Owner<'a, Variable<'a>> for Collectable<'a> {
+  fn insert(&mut self, p: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     self.properties
       .insert_graph_cell(p.source_name().value().clone(), p)
       .map_err(|p| ErrorKind::DuplicateDefinition(
@@ -233,7 +232,7 @@ impl<'a> Owner<'a, Property<'a>> for Collectable<'a> {
       ).into())
   }
 
-  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
     self.properties.get(name).map(|r| r.asleep_mut())
   }
 }

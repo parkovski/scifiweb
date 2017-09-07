@@ -3,14 +3,14 @@ use std::path::Path;
 use std::mem;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
-use super::var::Property;
+use super::var::Variable;
 use super::errors::*;
 use super::*;
 
 mod array;
 //mod callable;
 mod collectable;
-//mod object;
+mod object;
 //mod remote;
 mod user;
 
@@ -159,6 +159,9 @@ bitflags! {
     /// web endpoint to receive its
     /// notifications.
     const TC_NOTIFY_ENDPOINT                   = 0b00010000;
+    /// This type may inherit
+    /// from another type.
+    const TC_INHERIT                           = 0b00100000;
   }
 }
 
@@ -172,7 +175,7 @@ pub trait CustomType<'a>
   fn capabilities(&self) -> TypeCapability;
 
   fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> { None }
-  fn property(&self, _name: &str) -> Option<GraphRef<'a, Property<'a>>> { None }
+  fn property(&self, _name: &str) -> Option<GraphRef<'a, Variable<'a>>> { None }
 
   /// For casting
   fn _self_ptr(&self) -> *const usize { self as *const _ as *const usize }
