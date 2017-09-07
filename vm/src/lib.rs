@@ -1,6 +1,7 @@
 #![recursion_limit = "1024"]
 #![feature(conservative_impl_trait)]
 #![feature(box_syntax, box_patterns)]
+#![feature(match_beginning_vert)]
 
 #[macro_use]
 extern crate nom;

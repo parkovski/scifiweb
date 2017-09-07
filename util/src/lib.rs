@@ -12,6 +12,7 @@ extern crate chrono;
 
 pub mod future;
 pub mod graph_cell;
+pub mod later;
 pub mod logger;
 pub mod split_vec;
 pub mod sync;

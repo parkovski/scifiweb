@@ -67,13 +67,13 @@ pub enum TokenKind<'a> {
   Invalid(char),
   Eof,
   Identifier(&'a str),
-  Label(&'a str),
   String(&'a str),
   Integer(i64),
   Decimal(f64),
   Percentage(f64),
   Keyword(Keyword),
   Semicolon,
+  Colon,
   Dot,
   Comma,
   LParen,
@@ -102,13 +102,13 @@ impl<'a> TokenKind<'a> {
       TK::Invalid(_) => "invalid character",
       TK::Eof => "end of input",
       TK::Identifier(s) => s,
-      TK::Label(s) => s,
       TK::String(s) => s,
       TK::Integer(_) => "integer",
       TK::Decimal(_) => "decimal",
       TK::Percentage(_) => "percentage",
       TK::Keyword(k) => k.as_str(),
       TK::Semicolon => ";",
+      TK::Colon => ":",
       TK::Dot => ".",
       TK::Comma => ",",
       TK::LParen => "(",
@@ -132,6 +132,12 @@ impl<'a> TokenKind<'a> {
   }
 }
 
+impl<'a> AsRef<str> for TokenKind<'a> {
+  fn as_ref(&self) -> &str {
+    self.as_str()
+  }
+}
+
 impl<'a> Display for TokenKind<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     use self::TokenKind as TK;
@@ -139,7 +145,6 @@ impl<'a> Display for TokenKind<'a> {
       TK::Invalid(c) => write!(f, "invalid character '{}'", c),
       TK::Eof => write!(f, "end of input"),
       TK::Identifier(s) => write!(f, "identifier {}", s),
-      TK::Label(s) => write!(f, "label {}:", s),
       TK::String(s) => write!(f, "string '{}'", s),
       TK::Integer(i) => write!(f, "integer {}", i),
       TK::Decimal(d) => write!(f, "decimal {}", d),
@@ -250,7 +255,6 @@ where
 pub enum TokenMatch {
   Invalid,
   Identifier,
-  Label,
   String,
   Integer,
   Decimal,
@@ -258,18 +262,23 @@ pub enum TokenMatch {
   Keyword,
 }
 
-impl Display for TokenMatch {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    f.write_str(match *self {
+impl AsRef<str> for TokenMatch {
+  fn as_ref(&self) -> &str {
+    match *self {
       TokenMatch::Invalid => "invalid",
       TokenMatch::Identifier => "identifier",
-      TokenMatch::Label => "label",
       TokenMatch::String => "string",
       TokenMatch::Integer => "integer",
       TokenMatch::Decimal => "decimal",
       TokenMatch::Percentage => "percentage",
       TokenMatch::Keyword => "keyword",
-    })
+    }
+  }
+}
+
+impl Display for TokenMatch {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str(self.as_ref())
   }
 }
 
@@ -306,7 +315,6 @@ impl<'a> PartialEq<Token<'a>> for TokenMatch {
     match other.kind {
       TokenKind::Invalid(_) => *self == TokenMatch::Invalid,
       TokenKind::Identifier(_) => *self == TokenMatch::Identifier,
-      TokenKind::Label(_) => *self == TokenMatch::Label,
       TokenKind::String(_) => *self == TokenMatch::String,
       TokenKind::Integer(_) => *self == TokenMatch::Integer,
       TokenKind::Decimal(_) => *self == TokenMatch::Decimal,
@@ -338,6 +346,12 @@ macro_rules! keywords {
       }
     }
 
+    impl AsRef<str> for $typ {
+      fn as_ref(&self) -> &str {
+        self.as_str()
+      }
+    }
+
     impl Display for $typ {
       fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(self.as_str())
@@ -347,7 +361,7 @@ macro_rules! keywords {
     lazy_static! {
       static ref $map: FxHashMap<&'static str, $typ> = {
         let mut map = FxHashMap::default();
-        
+
         $( map.insert($s, $typ::$enm) );+ ;
         map
       };
@@ -366,7 +380,7 @@ keywords! {
   "datetime" => Datetime,
   "timespan" => Timespan,
 
-  "map" => Map,
+  "object" => Object,
   "array" => Array,
   "remote" => Remote,
   "user" => User,
@@ -382,7 +396,6 @@ keywords! {
   "hours" => Hours,
   "days" => Days,
   "weeks" => Weeks,
-  "months" => Months,
 
   "amount" => Amount,
   "cost" => Cost,
@@ -411,6 +424,10 @@ keywords! {
   "notify" => Notify,
   "option" => Option,
   "random" => Random,
+  "if" => If,
+  "else" => Else,
+  "do" => Do,
+  "end" => End,
 
   "include" => Include,
   "in" => In,
@@ -424,11 +441,8 @@ keywords! {
   "or" => Or
 }
 
-pub fn get_id_or_keyword<'a>(chars: &'a [u8], colon: bool) -> TokenKind<'a> {
+pub fn get_id_or_keyword<'a>(chars: &'a [u8]) -> TokenKind<'a> {
   let id = str::from_utf8(chars).unwrap();
-  if colon {
-    return TokenKind::Label(id);
-  }
   let keyword = KEYWORDS.get(id);
   if let Some(&k) = keyword {
     TokenKind::Keyword(k)

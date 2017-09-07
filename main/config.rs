@@ -8,6 +8,7 @@ pub const DEFAULT_CONFIG_PATH: &'static str = "./config/config.json";
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct Config {
   pub http_server_addr: String,
   pub ws_server_addr: String,

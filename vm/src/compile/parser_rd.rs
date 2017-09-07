@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::Read;
 use std::env;
-use std::fmt::Debug;
 use nom::IResult;
 use fxhash::FxHashSet;
 use ast::*;
@@ -16,12 +15,15 @@ use super::parse_errors::*;
 use super::token::*;
 /// Get the value from inside the TokenKind.
 macro_rules! extract {
-  ($kind:ident, $token:expr) => (
-    if let TokenKind::$kind(v) = $token {
-      v
+  ($self_:ident, $kind:ident in $token:expr) => (
+    if let TokenKind::$kind(v) = $token.kind {
+      Ok(v)
     } else {
-      panic!("Tried to extract {} from {}", stringify!($kind), &$token)
+      $self_.e_expected(stringify!($kind))
     }
+  );
+  ($self_:ident, $kind:ident) => (
+    extract!($self_, $kind in $self_.token)
   );
 }
 
@@ -31,8 +33,8 @@ macro_rules! extract {
 fn optional<T>(res: Result<T>) -> Result<Option<T>> {
   match res {
     Ok(t) => Ok(Some(t)),
-    Err(Error(ErrorKind::UnexpectedToken(_), _)) => Ok(None),
-    Err(Error(ErrorKind::Expected(_), _)) => Ok(None),
+    Err(Error(ErrorKind::Unexpected(..), _)) => Ok(None),
+    Err(Error(ErrorKind::Expected(..), _)) => Ok(None),
     Err(e) => Err(e),
   }
 }
@@ -85,7 +87,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       }
       .canonicalize()?
     );
-    
+
     if !self.included_paths.insert(filename.clone()) {
       trace!("Skipping already included file '{}'", filename.to_string_lossy());
       return Ok(());
@@ -154,7 +156,8 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     Ok(token)
   }
 
-  /// Top level: Include | Label: (def keyword)
+  /// Top level = Include | Def block
+  /// Def block = ident <def keyword> (';' | ':' body 'end;')
   fn parse_program(&mut self) -> Result<()> {
     self.advance()?;
     loop {
@@ -162,17 +165,27 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         return Ok(())
       } else if self.token == Keyword::Include {
         self.parse_include()?
-      } else if let TokenKind::Label(label) = self.token.kind {
+      } else if let TokenKind::Identifier(label) = self.token.kind {
         let label = self.string_token_value();
         self.advance()?;
-        // An item definition
-        let token = self.expect(TokenMatch::Keyword)?;
-        let keyword = extract!(Keyword, token.kind);
-        match keyword {
-          Keyword::Collectable => self.parse_collectable_or_group(label)?,
-          Keyword::User => self.parse_user(label)?,
-          Keyword::Event => self.parse_event(label)?,
-          _ => return self.e_unexpected(),
+        // An item (type) definition
+        let base_type = self.parse_base_custom_type()?;
+        if self.opt_consume(TokenKind::Semicolon)? {
+          // Empty item
+          self.ast.awake_mut().insert(base_type.into_empty_type(label))?;
+        } else {
+          self.consume(TokenKind::Colon)?;
+          let ty = match base_type {
+            | BaseCustomType::Collectable
+            | BaseCustomType::CollectableGroup
+              => self.parse_collectable_or_group(label, base_type),
+            | BaseCustomType::User => self.parse_user(label),
+            | BaseCustomType::Event => self.parse_event(label),
+            | _ => unimplemented!(),
+          }?;
+          self.consume(Keyword::End)?;
+          self.consume(TokenKind::Semicolon)?;
+          self.ast.awake_mut().insert(ty);
         }
       } else {
         return self.e_unexpected();
@@ -180,30 +193,85 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     }
   }
 
+  fn parse_base_custom_type(&mut self) -> Result<BaseCustomType> {
+    self.expect(TokenMatch::Keyword)?;
+    let kwd = extract!(self, Keyword)?;
+    Ok(match kwd {
+      Keyword::Collectable => {
+        self.advance()?;
+        if self.opt_consume(Keyword::Group)? {
+          BaseCustomType::CollectableGroup
+        } else {
+          BaseCustomType::Collectable
+        }
+      }
+      Keyword::User => {
+        self.advance()?;
+        if self.opt_consume(Keyword::Group)? {
+          BaseCustomType::UserGroup
+        } else {
+          BaseCustomType::User
+        }
+      }
+      Keyword::Remote => {
+        self.advance()?;
+        let kwd = self.take(TokenMatch::Keyword)?;
+        if self.opt_consume(Keyword::Event)? {
+          BaseCustomType::RemoteEvent
+        } else if self.opt_consume(Keyword::Function)? {
+          BaseCustomType::RemoteFunction
+        } else {
+          return self.e_expected("event or function");
+        }
+      }
+      Keyword::Array => {
+        self.advance()?;
+        BaseCustomType::Array
+      }
+      Keyword::Object => {
+        self.advance()?;
+        BaseCustomType::Object
+      }
+      Keyword::Event => {
+        self.advance()?;
+        BaseCustomType::Event
+      }
+      Keyword::Function => {
+        self.advance()?;
+        BaseCustomType::Function
+      }
+      _ => return self.e_expected("base type keyword"),
+    })
+  }
+
   // ===== Include =====
 
   fn parse_include(&mut self) -> Result<()> {
     self.consume(Keyword::Include)?;
-    let path = self.take(TokenMatch::String)?;
+    let path_token = self.take(TokenMatch::String)?;
     self.consume(TokenKind::Semicolon)?;
-    self.include(extract!(String, path.kind))?;
+    let path = extract!(self, String in path_token)?;
+    self.include(path)?;
     Ok(())
   }
 
   // ===== User =====
 
-  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<Type<'ast>> {
     self.consume(Keyword::User)?;
     self.consume(TokenKind::Semicolon)?;
-    Ok(())
+    unimplemented!()
   }
 
   // ===== Collectable =====
 
-  fn parse_collectable_or_group(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
-    self.consume(Keyword::Collectable)?;
-    let is_group = self.opt_consume(Keyword::Group)?;
-    self.consume(TokenKind::Semicolon)?;
+  fn parse_collectable_or_group(
+    &mut self,
+    label: TokenValue<Arc<str>>,
+    base_type: BaseCustomType,
+  ) -> Result<Type<'ast>>
+  {
+    let is_group = base_type == BaseCustomType::CollectableGroup;
     // Collectables support 'has upgrades', 'has redemptions', and 'property'.
     // The first statement can optionally be 'has amount'.
     // Groups also support 'has collectable' and 'has collectable group'.
@@ -218,12 +286,11 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     }
     if is_group {
       let group = self.parse_collectable_group(label)?;
-      self.ast.awake_mut().insert(group)?;
+      Ok(group.into())
     } else {
       let collectable = self.parse_collectable(label)?;
-      self.ast.awake_mut().insert(collectable)?;
+      Ok(collectable.into())
     }
-    Ok(())
   }
 
   fn parse_collectable_group(&mut self, label: TokenValue<Arc<str>>)
@@ -259,12 +326,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       } else {
         break;
       }
-      self.expect(TokenKind::Semicolon)?;
     }
     Ok(collectable)
   }
 
-  /// Ident | Label (upgrades, redemptions)?
   fn parse_inline_collectable(
     &mut self,
     group: &mut CollectableGroup<'ast>,
@@ -272,9 +337,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   {
     if self.token == TokenMatch::Identifier {
       group.insert_ref_mut(ItemRefMut::new(self.string_token_value()))?;
-      self.advance()?;
-    } else if self.token == TokenMatch::Label {
-      //group.insert_ref_mut(ItemRefMut::new(self.string_token_value()))?;
       self.advance()?;
       //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
     }
@@ -327,9 +389,9 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // ===== Event =====
 
-  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<Type<'ast>> {
     self.consume(Keyword::Event)?;
-    Ok(())
+    unimplemented!()
   }
 
   // ===== Variables =====
@@ -341,7 +403,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   fn parse_full_type_name(&mut self) -> Result<TypeRef> {
     let token = self.take(TokenKind::Keyword)?;
-    let kw = extract!(Keyword, token.kind);
+    let kw = extract!(self, Keyword)?;
     Ok(match kw {
       Keyword::Switch => TypeRef::Primitive(PrimitiveType::Switch),
       Keyword::Text => TypeRef::Primitive(PrimitiveType::Text),
@@ -353,13 +415,13 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       Keyword::Decimal => TypeRef::Primitive(PrimitiveType::Decimal),
       Keyword::Datetime => TypeRef::Primitive(PrimitiveType::DateTime),
       Keyword::Timespan => TypeRef::Primitive(PrimitiveType::TimeSpan),
-      Keyword::Map => {
+      Keyword::Object => {
         if self.token == TokenMatch::Identifier {
           let tv = self.string_token_value();
           self.advance()?;
           TypeRef::Custom(ItemRef::new(tv))
         } else {
-          TypeRef::Primitive(PrimitiveType::Map)
+          TypeRef::Primitive(PrimitiveType::Object)
         }
       }
       Keyword::Array => ,
@@ -408,46 +470,50 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // ===== Helpers =====
 
-  fn e_expected<T: Debug, O>(&self, t: T) -> Result<O> {
-    Err(ErrorKind::Expected(format!("expected {:?}, found {}", t, &self.token)).into())
+  fn e_expected<T: Into<String>, O>(&self, t: T) -> Result<O> {
+    Err(ErrorKind::Expected(t.into(), self.string_token_value()).into())
   }
 
   fn e_unexpected<O>(&self) -> Result<O> {
-    Err(ErrorKind::UnexpectedToken(self.token.to_string()).into())
+    Err(ErrorKind::Unexpected(self.string_token_value()).into())
+  }
+
+  fn e_syntax<T: Into<String>, O>(&self, msg: T) -> Result<O> {
+    Err(ErrorKind::Syntax(msg.into(), self.token.span.clone()).into())
   }
 
   /// Move to the next token, returning the current if it matches.
-  fn take<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<Token<'p>> {
+  fn take<T: PartialEq<Token<'p>> + AsRef<str>>(&mut self, t: T) -> Result<Token<'p>> {
     if &t == &self.token {
       let token = self.token.clone();
       self.advance()?;
       Ok(token)
     } else {
-      self.e_expected(t)
+      self.e_expected(t.as_ref())
     }
   }
 
   /// Return the current token if it matches, otherwise error. Don't advance.
-  fn expect<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<Token<'p>> {
+  fn expect<T: PartialEq<Token<'p>> + AsRef<str>>(&mut self, t: T) -> Result<Token<'p>> {
     if &t == &self.token {
       Ok(self.token.clone())
     } else {
-      self.e_expected(t)
+      self.e_expected(t.as_ref())
     }
   }
 
   /// Move to the next token if the current matches, otherwise error.
-  fn consume<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<()> {
+  fn consume<T: PartialEq<Token<'p>> + AsRef<str>>(&mut self, t: T) -> Result<()> {
     if &t == &self.token {
       self.advance()?;
       Ok(())
     } else {
-      self.e_expected(t)
+      self.e_expected(t.as_ref())
     }
   }
 
   /// Move to the next token if the current matches, otherwise false.
-  fn opt_consume<T: PartialEq<Token<'p>> + Debug>(&mut self, t: T) -> Result<bool> {
+  fn opt_consume<T: PartialEq<Token<'p>>>(&mut self, t: T) -> Result<bool> {
     if &t == &self.token {
       self.advance()?;
       Ok(true)

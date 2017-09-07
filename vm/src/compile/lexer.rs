@@ -32,6 +32,9 @@ macro_rules! lexfn {
 lexfn!(op_semicolon -> TokenKind<'a>,
   do_parse!(tag!(";") >> (TokenKind::Semicolon))
 );
+lexfn!(op_colon -> TokenKind<'a>,
+  do_parse!(tag!(":") >> (TokenKind::Colon))
+);
 lexfn!(op_dot -> TokenKind<'a>,
   do_parse!(tag!(".") >> (TokenKind::Dot))
 );
@@ -93,6 +96,7 @@ lexfn!(op_exclamation -> TokenKind<'a>,
 lexfn!(operator -> TokenKind<'a>,
   alt_complete!(
     op_semicolon
+    | op_colon
     | op_dot
     | op_comma
     | op_lparen
@@ -142,8 +146,7 @@ lexfn!(regular_identifier -> TokenKind<'a>,
         (())
       )
     ) >>
-    colon: opt!(complete!(tag!(":"))) >>
-    (get_id_or_keyword(chars, colon.is_some()))
+    (get_id_or_keyword(chars))
   )
 );
 

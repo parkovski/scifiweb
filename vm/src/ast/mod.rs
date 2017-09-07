@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::default::Default;
 use std::fmt::{Debug, Display};
 use fxhash::FxHashMap;
-use util::{SharedStrings, InsertUnique, InsertGraphCell};
+use util::{SharedStrings, InsertGraphCell};
 use util::graph_cell::*;
 use compile::{TokenSpan, TokenValue};
 
@@ -42,7 +42,10 @@ pub trait SourceItem: Named {
 
 pub trait Owner<'a, T: SourceItem + 'a> {
   fn insert(&mut self, item: T) -> Result<GraphRefMut<'a, T>>;
-  fn find(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
+  fn find(&self, name: &str) -> Option<GraphRef<'a, T>> {
+    self.find_mut(name).map(|gr| gr.asleep_ref())
+  }
 }
 
 pub trait RefOwner<'a, T: SourceItem + 'a> {
@@ -70,7 +73,7 @@ pub struct ItemRefMut<'a, T: SourceItem + 'a> {
 }
 
 macro_rules! item_ref_impls {
-  ($t:ident, ($($conv:tt)*)) => (
+  ($t:ident, $graph_ref:ident, $awake:ident, $find:ident) => (
     impl<'a, T: SourceItem + 'a> $t<'a, T> {
       pub fn new(name: TokenValue<Arc<str>>) -> Self {
         $t {
@@ -79,13 +82,20 @@ macro_rules! item_ref_impls {
         }
       }
 
-      pub fn resolve<O>(&mut self, owner: &O) -> Result<()>
+      pub fn with_item(item: $graph_ref<'a, T>) -> Self {
+        $t {
+          name: item.$awake().source_name().clone(),
+          item: Some(item),
+        }
+      }
+
+      pub fn resolve<O>(&mut self, owner: &O) -> Result<$graph_ref<'a, T>>
       where O: Owner<'a, T> + Debug + 'a
       {
-        match owner.find(&self.name) {
+        match owner.$find(&self.name) {
           Some(r) => {
-            self.item = Some(r $($conv)*);
-            Ok(())
+            self.item = Some(r.clone());
+            Ok(r)
           }
           None => Err(ErrorKind::NotDefined(
             self.name.value().clone(),
@@ -113,8 +123,8 @@ macro_rules! item_ref_impls {
   );
 }
 
-item_ref_impls!(ItemRef, (.asleep_ref()));
-item_ref_impls!(ItemRefMut, ());
+item_ref_impls!(ItemRef, GraphRef, awake, find);
+item_ref_impls!(ItemRefMut, GraphRefMut, awake_ref, find_mut);
 
 impl<'a, T: SourceItem + 'a> ItemRef<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
@@ -150,11 +160,13 @@ pub struct Ast<'a> {
 
 impl<'a> Ast<'a> {
   pub fn new() -> Box<GraphCell<Self>> {
-    box GraphCell::new(Ast {
+    let ast = box GraphCell::new(Ast {
       types: Default::default(),
       //globals: Default::default(),
       strings: SharedStrings::new(),
-    })
+    });
+    PrimitiveType::insert_all(&mut ast.awake_mut());
+    ast
   }
 
   pub fn shared_string(&self, s: &str) -> Arc<str> {
@@ -187,7 +199,7 @@ impl<'a> Owner<'a, Type<'a>> for Ast<'a> {
       ).into())
   }
 
-  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Type<'a>>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Type<'a>>> {
     self.types.get(name).map(|t| t.asleep_mut())
   }
 }
@@ -210,12 +222,20 @@ where
 
   /// This uses the mutable reference, so no other
   /// references can be active when calling this.
-  fn find(&self, name: &str) -> Option<GraphRefMut<'a, T>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, T>> {
     let gr = match self.types.get(name) {
       Some(ref cell) => cell.asleep_mut(),
       None => return None,
     };
     gr.map_opt(|t| t.as_custom_mut().and_then(T::try_cast_mut))
+  }
+
+  fn find(&self, name: &str) -> Option<GraphRef<'a, T>> {
+    let gr = match self.types.get(name) {
+      Some(ref cell) => cell.asleep(),
+      None => return None,
+    };
+    gr.map_opt(|t| t.as_custom().and_then(T::try_cast))
   }
 }
 

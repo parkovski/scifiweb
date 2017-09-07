@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+use std::path::Path;
 use std::mem;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
@@ -20,7 +21,8 @@ pub enum PrimitiveType {
   Decimal,
   DateTime,
   TimeSpan,
-  Map,
+  Object,
+  Array,
 }
 
 impl PrimitiveType {
@@ -35,27 +37,27 @@ impl PrimitiveType {
       Decimal => "decimal",
       DateTime => "datetime",
       TimeSpan => "timespan",
-      Map => "map",
+      Object => "object",
+      Array => "array",
+    }
+  }
+
+  pub fn insert_all<'a>(ast: &mut Ast<'a>) {
+    use self::PrimitiveType::*;
+    let types = [
+      Void, Switch,
+      Text, LocalizedText,
+      Integer, Decimal,
+      DateTime, TimeSpan,
+      Object, Array
+    ];
+    let span = TokenSpan::new(Arc::new(Path::new("internal").into()));
+    for ty in &types {
+      let name = ast.shared_string(ty.as_str());
+      ast.insert(Type::Primitive(*ty, TokenValue::new(name, span.clone()))).unwrap();
     }
   }
 }
-
-/*lazy_static! {
-  static ref PRIMITIVE_TYPE_TOKEN_VALUES: [TokenValue<Arc<str>>] = {
-    let span = TokenSpan::new(::std::path::Path::new("internal").into());
-    [
-      TokenValue::new(PrimitiveType::Void.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::Switch.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::Text.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::LocalizedText.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::Integer.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::Decimal.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::DateTime.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::TimeSpan.as_str().into(), span.clone()),
-      TokenValue::new(PrimitiveType::Map.as_str().into(), span.clone()),
-    ]
-  };
-}*/
 
 impl Named for PrimitiveType {
   fn name(&self) -> &str {
@@ -74,7 +76,7 @@ named_display!(PrimitiveType);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BaseCustomType {
   Array,
-  Map,
+  Object,
   Collectable,
   CollectableGroup,
   User,
@@ -90,7 +92,7 @@ impl BaseCustomType {
     use self::BaseCustomType::*;
     match *self {
       Array => "array",
-      Map => "map",
+      Object => "object",
       Collectable => "collectable",
       CollectableGroup => "collectable group",
       User => "user",
@@ -99,6 +101,22 @@ impl BaseCustomType {
       RemoteEvent => "remote event",
       Function => "function",
       RemoteFunction => "remote function",
+    }
+  }
+
+  pub fn into_empty_type<'a>(self, name: TokenValue<Arc<str>>) -> Type<'a> {
+    use self::BaseCustomType::*;
+    match self {
+      Array => unimplemented!(),
+      Object => unimplemented!(),
+      Collectable => unimplemented!(),
+      CollectableGroup => unimplemented!(),
+      User => unimplemented!(),
+      UserGroup => unimplemented!(),
+      Event => unimplemented!(),
+      RemoteEvent => unimplemented!(),
+      Function => unimplemented!(),
+      RemoteFunction => unimplemented!(),
     }
   }
 }
@@ -146,8 +164,8 @@ pub trait CustomType<'a>
   fn capabilities(&self) -> TypeCapability;
 
   fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> { None }
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Property<'a>>> { None }
-  
+  fn property(&self, _name: &str) -> Option<GraphRef<'a, Property<'a>>> { None }
+
   /// For casting
   fn _self_ptr(&self) -> *const usize { self as *const _ as *const usize }
 }
@@ -199,6 +217,26 @@ impl<'a, T: CustomType<'a> + SourceItem> Named for T {
 impl<'a, T: CustomType<'a> + 'a> From<T> for Type<'a> {
   fn from(custom: T) -> Self {
     Type::Custom(Box::new(custom))
+  }
+}
+
+pub trait SubType<'a, T: SourceItem>: SourceItem {
+  fn super_type(&self) -> Option<GraphRef<'a, T>>;
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, T>);
+  fn set_super_type(&mut self, super_type: GraphRef<'a, T>) -> Result<()> {
+    if let Some(ref st) = self.super_type() {
+      if st.awake().name() == super_type.awake().name() {
+        return Ok(());
+      } else {
+        return Err(ErrorKind::ConflictingSuperType(
+          self.source_name().value().clone(),
+          st.awake().source_name().value().clone(),
+          super_type.awake().source_name().value().clone(),
+        ).into());
+      }
+    }
+    self.assign_super_type_internal(super_type);
+    Ok(())
   }
 }
 

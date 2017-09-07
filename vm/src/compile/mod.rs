@@ -54,36 +54,37 @@ mod parse_errors {
   // Why do I need to do this error_chain?
   #![allow(unused_doc_comment)]
 
+  use std::sync::Arc;
   use nom;
   use ast;
   use super::Placeholder;
-  use super::token::TokenSpan;
+  use super::token::{TokenValue, TokenSpan};
 
   error_chain! {
     errors {
-      UnclosedString(span: Placeholder<TokenSpan>) {
-        description("unclosed string")
-        display("unclosed string at {}", span)
-      }
-
-      UnexpectedToken(token: String) {
-        description("unexpected token")
-        display("unexpected token {}", token)
-      }
-
       Nom(span: TokenSpan) {
         description("nom")
         display("nom error at {}", span)
       }
 
-      Expected(message: String) {
-        description("expected token not found")
-        display("{}", message)
+      UnclosedString(span: Placeholder<TokenSpan>) {
+        description("unclosed string")
+        display("unclosed string at {}", span)
       }
 
-      Syntax(message: String) {
+      Unexpected(token: TokenValue<Arc<str>>) {
+        description("unexpected token")
+        display("unexpected token {}", &token)
+      }
+
+      Expected(expected: String, found: TokenValue<Arc<str>>) {
+        description("expected token not found")
+        display("expected {}, found {}", &expected, &found)
+      }
+
+      Syntax(message: String, location: TokenSpan) {
         description("syntax error")
-        display("syntax error: {}", message)
+        display("syntax error: {} at {}", &message, &location)
       }
     }
 

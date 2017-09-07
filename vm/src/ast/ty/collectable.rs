@@ -23,7 +23,9 @@ pub enum AutoGrouping {
 pub struct CollectableGroup<'a> {
   name: TokenValue<Arc<str>>,
   ast: GraphRefMut<'a, Ast<'a>>,
+  //self_ref: GraphRef<'a, Self>,
   auto_grouping: AutoGrouping,
+  parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
   properties: FxHashMap<Arc<str>, GraphCell<Property<'a>>>,
   collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
 }
@@ -37,6 +39,7 @@ impl<'a> CollectableGroup<'a> {
       name,
       ast,
       auto_grouping: AutoGrouping::Inherit,
+      parent: None,
       properties: Default::default(),
       collectables: Default::default(),
     }
@@ -49,33 +52,6 @@ impl<'a> CollectableGroup<'a> {
   pub fn set_auto_grouping(&mut self, ag: AutoGrouping) {
     self.auto_grouping = ag;
   }
-/*
-  pub fn add_property(&mut self, prop: Property<'a>) -> Result<()> {
-    self.properties
-      .insert_unique(prop.source_name().value().clone(), prop)
-      .map_err(|(name, p)|
-        ErrorKind::DuplicateDefinition(name, "property").into()
-      )
-  }
-
-/*
-  pub fn collectable(&self, name: &str) -> Option<&ItemRef<'a, Collectable<'a, R>, Ast<R>>> {
-    self.collectables.get(name)
-  }
-  */
-
-  pub fn add_collectable(
-    &mut self,
-    c: ItemRef<'a, Collectable<'a, R>, Ast<'a, R>>
-  ) -> Result<()>
-  {
-    self.properties
-      .insert_unique(c.source_name().value().clone(), c)
-      .map_err(|(name, c)|
-        ErrorKind::DuplicateDefinition(name, "collectable").into()
-      )
-  }
-*/
 }
 
 impl<'a> SourceItem for CollectableGroup<'a> {
@@ -89,7 +65,7 @@ impl<'a> SourceItem for CollectableGroup<'a> {
 
   fn resolve(&mut self) -> Result<()> {
     for c in self.collectables.values_mut() {
-      c.resolve(&*self.ast.awake_ref())?;
+      c.resolve(&*self.ast.awake_ref())?;//.set_parent(self.self_ref)?;
     }
     Ok(())
   }
@@ -113,12 +89,21 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
   }
 
   fn property(&self, name: &str) -> Option<GraphRef<'a, Property<'a>>> {
-    //self.properties.get(name)
-    None
+    self.properties.get(name).map(|p| p.asleep())
   }
 
   fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> {
     None
+  }
+}
+
+impl<'a> SubType<'a, CollectableGroup<'a>> for CollectableGroup<'a> {
+  fn super_type(&self) -> Option<GraphRef<'a, CollectableGroup<'a>>> {
+    self.parent
+  }
+
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, CollectableGroup<'a>>) {
+    self.parent = Some(super_type);
   }
 }
 
@@ -132,7 +117,7 @@ impl<'a> Owner<'a, Property<'a>> for CollectableGroup<'a> {
       ).into())
   }
 
-  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
     self.properties.get(name).map(|p| p.asleep_mut())
   }
 }
@@ -175,22 +160,14 @@ impl<'a> Collectable<'a> {
       properties: Default::default(),
     }
   }
-/*
-  pub fn set_parent(&mut self, parent: ItemRef<'a, CollectableGroup<'a>>) -> Result<()> {
-    if let Some(ref p) = self.parent {
-      if p.name() == parent.name() {
-        return Ok(())
-      } else {
-        return Err(ErrorKind::ConflictingSuperType(
-          self.name.value().clone(),
-          p.source_name().value().clone(),
-          parent.source_name().value().clone(),
-        ).into());
-      }
-    }
-    self.parent = Some(parent);
-    Ok(())
-  }*/
+
+  pub fn auto_grouping(&self) -> AutoGrouping {
+    self.auto_grouping
+  }
+
+  pub fn set_auto_grouping(&mut self, auto_grouping: AutoGrouping) {
+    self.auto_grouping = auto_grouping;
+  }
 }
 
 impl<'a> SourceItem for Collectable<'a> {
@@ -221,7 +198,7 @@ impl<'a> CustomType<'a> for Collectable<'a> {
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_PROPERTIES
+    TC_PROPERTIES | TC_OWNED
   }
 
   fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> {
@@ -236,6 +213,16 @@ impl<'a> CustomType<'a> for Collectable<'a> {
   }
 }
 
+impl<'a> SubType<'a, CollectableGroup<'a>> for Collectable<'a> {
+  fn super_type(&self) -> Option<GraphRef<'a, CollectableGroup<'a>>> {
+    self.parent
+  }
+
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, CollectableGroup<'a>>) {
+    self.parent = Some(super_type);
+  }
+}
+
 impl<'a> Owner<'a, Property<'a>> for Collectable<'a> {
   fn insert(&mut self, p: Property<'a>) -> Result<GraphRefMut<'a, Property<'a>>> {
     self.properties
@@ -246,7 +233,7 @@ impl<'a> Owner<'a, Property<'a>> for Collectable<'a> {
       ).into())
   }
 
-  fn find(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Property<'a>>> {
     self.properties.get(name).map(|r| r.asleep_mut())
   }
 }
