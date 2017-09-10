@@ -26,6 +26,20 @@ impl<'a> Object<'a> {
       super_type: None,
     }
   }
+
+  fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
+    let gr = self.properties
+      .insert_graph_cell(p.source_name().value().clone(), p);
+    match gr {
+      Ok(_) => Ok(()),
+      Err(p) => Err(
+        ErrorKind::DuplicateDefinition(
+          p.source_name().value().clone(),
+          "property"
+        ).into()
+      )
+    }
+  }
 }
 
 impl<'a> SourceItem for Object<'a> {
@@ -75,20 +89,5 @@ impl<'a> SubType<'a, Object<'a>> for Object<'a> {
 
   fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, Object<'a>>) {
     //
-  }
-}
-
-impl<'a> Owner<'a, Variable<'a>> for Object<'a> {
-  fn insert(&mut self, p: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
-    self.properties
-      .insert_graph_cell(p.source_name().value().clone(), p)
-      .map_err(|p| ErrorKind::DuplicateDefinition(
-        p.source_name().value().clone(),
-        "property"
-      ).into())
-  }
-
-  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
-    self.properties.get(name).map(|p| p.asleep_mut())
   }
 }

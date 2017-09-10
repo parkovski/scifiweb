@@ -172,20 +172,34 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         let base_type = self.parse_base_custom_type()?;
         if self.opt_consume(TokenKind::Semicolon)? {
           // Empty item
-          self.ast.awake_mut().insert(base_type.into_empty_type(label))?;
+          base_type.insert_empty_type(self.ast, label)?;
         } else {
           self.consume(TokenKind::Colon)?;
-          let ty = match base_type {
+          match base_type {
             | BaseCustomType::Collectable
+              => Ast::insert_type(self.ast, self.parse_collectable(label)?),
             | BaseCustomType::CollectableGroup
-              => self.parse_collectable_or_group(label, base_type),
-            | BaseCustomType::User => self.parse_user(label),
-            | BaseCustomType::Event => self.parse_event(label),
+              => Ast::insert_type(self.ast, self.parse_collectable_group(label)?),
+            | BaseCustomType::User
+              => Ast::insert_type(self.ast, self.parse_user(label)?),
+            | BaseCustomType::UserGroup
+              => Ast::insert_type(self.ast, self.parse_user_group(label)?),
+            | BaseCustomType::Event
+              => Ast::insert_type(self.ast, self.parse_event(label)?),
+            | BaseCustomType::RemoteEvent
+              => Ast::insert_type(self.ast, self.parse_remote_event(label)?),
+            | BaseCustomType::Function
+              => Ast::insert_type(self.ast, self.parse_function(label)?),
+            | BaseCustomType::RemoteFunction
+              => Ast::insert_type(self.ast, self.parse_remote_function(label)?),
+            | BaseCustomType::Object
+              => Ast::insert_type(self.ast, self.parse_object_type(label)?),
+            | BaseCustomType::Array
+              => return self.e_syntax("custom array types are defined inline"),
             | _ => unimplemented!(),
           }?;
           self.consume(Keyword::End)?;
           self.consume(TokenKind::Semicolon)?;
-          self.ast.awake_mut().insert(ty)?;
         }
       } else {
         return self.e_unexpected();
@@ -257,46 +271,34 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // ===== User =====
 
-  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<Type<'ast>> {
-    self.consume(Keyword::User)?;
-    self.consume(TokenKind::Semicolon)?;
+  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<User<'ast>> {
+    unimplemented!()
+  }
+
+  fn parse_user_group(&mut self, label: TokenValue<Arc<str>>)
+    -> Result<UserGroup<'ast>>
+  {
     unimplemented!()
   }
 
   // ===== Collectable =====
 
-  fn parse_collectable_or_group(
-    &mut self,
-    label: TokenValue<Arc<str>>,
-    base_type: BaseCustomType,
-  ) -> Result<Type<'ast>>
-  {
-    let is_group = base_type == BaseCustomType::CollectableGroup;
-    // Collectables support 'has upgrades', 'has redemptions', and 'property'.
-    // The first statement can optionally be 'has amount'.
-    // Groups also support 'has collectable' and 'has collectable group'.
-    // All their properties, redemptions, and upgrades are inherited
-    // by the children in those lists.
-    let mut auto_grouping = AutoGrouping::Inherit;
+  fn parse_auto_grouping(&mut self) -> Result<AutoGrouping> {
     if self.token == Keyword::Has && self.peek()? == Keyword::Amount {
       self.advance()?;
       self.advance()?;
-      auto_grouping = AutoGrouping::ByAmount;
       self.consume(TokenKind::Semicolon)?;
-    }
-    if is_group {
-      let group = self.parse_collectable_group(label)?;
-      Ok(group.into())
+      Ok(AutoGrouping::ByAmount)
     } else {
-      let collectable = self.parse_collectable(label)?;
-      Ok(collectable.into())
+      Ok(AutoGrouping::Inherit)
     }
   }
 
   fn parse_collectable_group(&mut self, label: TokenValue<Arc<str>>)
     -> Result<CollectableGroup<'ast>>
   {
-    let mut group = CollectableGroup::new(label, self.ast.clone());
+    let mut group = CollectableGroup::new(label);
+    self.parse_auto_grouping()?;
     //self.all([
     //  |&mut this, &mut grp| {
     //    let list = this.parse_has_collectable()?;
@@ -311,6 +313,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     -> Result<Collectable<'ast>>
   {
     let mut collectable = Collectable::new(label);
+    self.parse_auto_grouping()?;
     loop {
       if self.opt_consume(Keyword::Has)? {
         if self.opt_consume(Keyword::Redemptions)? {
@@ -336,7 +339,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   ) -> Result<()>
   {
     if self.token == TokenMatch::Identifier {
-      group.insert_ref_mut(ItemRefMut::new(self.string_token_value()))?;
+      group.insert_collectable_ref(ItemRefMut::new(self.string_token_value()))?;
       self.advance()?;
       //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
     }
@@ -389,8 +392,31 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // ===== Event =====
 
-  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<Type<'ast>> {
-    self.consume(Keyword::Event)?;
+  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<Event<'ast>> {
+    unimplemented!()
+  }
+
+  fn parse_remote_event(&mut self, label: TokenValue<Arc<str>>)
+    -> Result<RemoteEvent<'ast>>
+  {
+    unimplemented!()
+  }
+
+  // ===== Function =====
+
+  fn parse_function(&mut self, label: TokenValue<Arc<str>>) -> Result<Function<'ast>> {
+    unimplemented!()
+  }
+
+  fn parse_remote_function(&mut self, label: TokenValue<Arc<str>>)
+    -> Result<RemoteFunction<'ast>>
+  {
+    unimplemented!()
+  }
+
+  // ===== Object =====
+
+  fn parse_object_type(&mut self, label: TokenValue<Arc<str>>) -> Result<Object<'ast>> {
     unimplemented!()
   }
 

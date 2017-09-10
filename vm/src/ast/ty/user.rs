@@ -107,9 +107,6 @@ impl<'a> CustomType<'a> for UserGroup<'a> {
   }
 }
 
-// impl<'a> RefOwner<'a, User<'a>> for UserGroup<'a> ...
-// impl<'a> RefOwner<'a, UserGroup<'a>> for UserGroup<'a> ...
-
 /// This does not represent a single user. It is a user type that can belong
 /// to any number of user groups, have properties, and has automatic
 /// collectable ownership, notification target, and authentication functionality.

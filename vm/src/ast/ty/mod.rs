@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
-use std::path::Path;
 use std::mem;
+use std::iter::Iterator;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
 use super::var::Variable;
@@ -8,14 +8,17 @@ use super::errors::*;
 use super::*;
 
 mod array;
-//mod callable;
 mod collectable;
+mod event;
+mod function;
 mod object;
-//mod remote;
 mod user;
 
 pub use self::array::*;
 pub use self::collectable::*;
+pub use self::event::*;
+pub use self::function::*;
+pub use self::object::*;
 pub use self::user::*;
 
 /// Primitive types usable as-is.
@@ -50,20 +53,34 @@ impl PrimitiveType {
     }
   }
 
-  pub fn insert_all<'a>(ast: &mut Ast<'a>) {
-    use self::PrimitiveType::*;
-    let types = [
-      Void, Switch,
-      Text, LocalizedText,
-      Integer, Decimal,
-      DateTime, TimeSpan,
-      Object, Array
-    ];
-    let span = TokenSpan::new(Arc::new(Path::new("internal").into()));
-    for ty in &types {
-      let name = ast.shared_string(ty.as_str());
-      ast.insert(Type::Primitive(*ty, TokenValue::new(name, span.clone()))).unwrap();
+  pub fn iter() -> impl Iterator<Item = PrimitiveType> {
+    struct PrimitiveTypeIter {
+      next: Option<PrimitiveType>,
     }
+
+    impl Iterator for PrimitiveTypeIter {
+      type Item = PrimitiveType;
+      fn next(&mut self) -> Option<PrimitiveType> {
+        use self::PrimitiveType::*;
+        let next = self.next;
+        self.next = match next {
+          Some(Void) => Some(Switch),
+          Some(Switch) => Some(Text),
+          Some(Text) => Some(LocalizedText),
+          Some(LocalizedText) => Some(Integer),
+          Some(Integer) => Some(Decimal),
+          Some(Decimal) => Some(DateTime),
+          Some(DateTime) => Some(TimeSpan),
+          Some(TimeSpan) => Some(Object),
+          Some(Object) => Some(Array),
+          Some(Array) => None,
+          None => None,
+        };
+        next
+      }
+    }
+
+    PrimitiveTypeIter { next: Some(PrimitiveType::Void) }
   }
 }
 
@@ -112,20 +129,28 @@ impl BaseCustomType {
     }
   }
 
-  pub fn into_empty_type<'a>(self, name: TokenValue<Arc<str>>) -> Type<'a> {
-    use self::BaseCustomType::*;
-    match self {
-      Array => unimplemented!(),
-      Object => unimplemented!(),
-      Collectable => unimplemented!(),
-      CollectableGroup => unimplemented!(),
-      User => unimplemented!(),
-      UserGroup => unimplemented!(),
-      Event => unimplemented!(),
-      RemoteEvent => unimplemented!(),
-      Function => unimplemented!(),
-      RemoteFunction => unimplemented!(),
+  pub fn insert_empty_type<'a>(
+    &self,
+    ast: GraphRefMut<'a, Ast<'a>>,
+    name: TokenValue<Arc<str>>
+  ) -> Result<()>
+  {
+    match *self {
+      BaseCustomType::Array
+        => return Err(ErrorKind::InvalidOperation(
+          "custom array types are defined inline"
+        ).into()),
+      BaseCustomType::Object => Ast::insert_type(ast, Object::new(name))?,
+      BaseCustomType::Collectable => Ast::insert_type(ast, Collectable::new(name))?,
+      BaseCustomType::CollectableGroup => Ast::insert_type(ast, CollectableGroup::new(name))?,
+      BaseCustomType::User => Ast::insert_type(ast, User::new(name))?,
+      BaseCustomType::UserGroup => Ast::insert_type(ast, UserGroup::new(name))?,
+      BaseCustomType::Event => Ast::insert_type(ast, Event::new(name))?,
+      BaseCustomType::RemoteEvent => Ast::insert_type(ast, RemoteEvent::new(name))?,
+      BaseCustomType::Function => Ast::insert_type(ast, Function::new(name))?,
+      BaseCustomType::RemoteFunction => Ast::insert_type(ast, RemoteFunction::new(name))?,
     }
+    Ok(())
   }
 }
 
@@ -171,6 +196,12 @@ pub trait CustomType<'a>
   + Named
   + SourceItem
 {
+  fn init_cyclic(
+    &mut self,
+    _self_ref: GraphRef<'a, Self>,
+    _ast_ref: GraphRef<'a, Ast<'a>>
+  ) where Self: Sized {}
+
   fn base_type(&self) -> BaseCustomType;
   fn capabilities(&self) -> TypeCapability;
 

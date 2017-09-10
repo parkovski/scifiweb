@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::default::Default;
 use std::fmt::{Debug, Display};
+use std::path::{Path, PathBuf};
 use fxhash::FxHashMap;
 use util::{SharedStrings, InsertGraphCell};
 use util::graph_cell::*;
@@ -40,22 +41,12 @@ pub trait SourceItem: Named {
   fn typecheck(&mut self) -> Result<()>;
 }
 
+/// For ItemRef resolution.
 pub trait Owner<'a, T: SourceItem + 'a> {
-  fn insert(&mut self, item: T) -> Result<GraphRefMut<'a, T>>;
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
   fn find(&self, name: &str) -> Option<GraphRef<'a, T>> {
     self.find_mut(name).map(|gr| gr.asleep_ref())
   }
-}
-
-pub trait RefOwner<'a, T: SourceItem + 'a> {
-  fn insert_ref(&mut self, r: ItemRef<'a, T>) -> Result<()>;
-  fn has_ref(&self, name: &str) -> bool;
-}
-
-pub trait RefMutOwner<'a, T: SourceItem + 'a> {
-  fn insert_ref_mut(&mut self, r: ItemRefMut<'a, T>) -> Result<()>;
-  fn has_ref_mut(&self, name: &str) -> bool;
 }
 
 // =====
@@ -154,8 +145,10 @@ impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
 #[derive(Debug)]
 pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
-  //globals: FxHashMap<Arc<str>, GraphCell<var::Var<'a>>>,
+  //globals: FxHashMap<Arc<str>, GraphCell<var::Variable<'a>>>,
   strings: SharedStrings,
+  /// The path "(internal)" for things with no code location.
+  internal_path: Arc<PathBuf>,
 }
 
 impl<'a> Ast<'a> {
@@ -164,13 +157,25 @@ impl<'a> Ast<'a> {
       types: Default::default(),
       //globals: Default::default(),
       strings: SharedStrings::new(),
+      internal_path: Arc::new(Path::new("(internal)").into()),
     });
-    PrimitiveType::insert_all(&mut ast.awake_mut());
+    let mut ast_ref = ast.awake_mut();
+    let pt_span = TokenSpan::new(ast_ref.internal_path());
+    for pt in PrimitiveType::iter() {
+      let name = ast_ref.shared_string(pt.name());
+      let tkval = TokenValue::new(name.clone(), pt_span.clone());
+      let ty = Type::Primitive(pt, tkval);
+      ast_ref.types.insert(name, GraphCell::new(ty));
+    }
     ast
   }
 
   pub fn shared_string(&self, s: &str) -> Arc<str> {
     self.strings.get(s)
+  }
+
+  pub fn internal_path(&self) -> Arc<PathBuf> {
+    self.internal_path.clone()
   }
 
   fn resolution_step<F>(&self, step: F) -> Result<()>
@@ -186,19 +191,33 @@ impl<'a> Ast<'a> {
     self.resolution_step(SourceItem::resolve)?;
     self.resolution_step(SourceItem::typecheck)
   }
+
+  pub fn insert_type<T>(this: GraphRefMut<'a, Ast<'a>>, ty: T) -> Result<()>
+  where T: CustomType<'a> + CastType<'a> + 'a
+  {
+    let name = ty.source_name().value().clone();
+    let self_ref = this.asleep_ref();
+    let gr = this
+      .awake_mut()
+      .types
+      .insert_graph_cell(name, Type::Custom(Box::new(ty)));
+    let type_ref = match gr {
+      Ok(type_ref) => type_ref,
+      Err(ty) => return Err(
+        ErrorKind::DuplicateDefinition(
+          ty.source_name().value().clone(),
+          ty.item_name(),
+        ).into()
+      ),
+    };
+    let t_mut = type_ref.map(|r| T::cast_mut(r.as_custom_mut().unwrap()));
+    let t_ref = t_mut.asleep_ref();
+    t_mut.awake_mut().init_cyclic(t_ref, self_ref);
+    Ok(())
+  }
 }
 
 impl<'a> Owner<'a, Type<'a>> for Ast<'a> {
-  fn insert(&mut self, ty: Type<'a>) -> Result<GraphRefMut<'a, Type<'a>>> {
-    let name = ty.source_name().value().clone();
-    self.types
-      .insert_graph_cell(name, ty)
-      .map_err(|ty| ErrorKind::DuplicateDefinition(
-        ty.source_name().value().clone(),
-        ty.item_name()
-      ).into())
-  }
-
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Type<'a>>> {
     self.types.get(name).map(|t| t.asleep_mut())
   }
@@ -208,18 +227,6 @@ impl<'a, T> Owner<'a, T> for Ast<'a>
 where
   T: CustomType<'a> + CastType<'a> + 'a
 {
-  fn insert(&mut self, ty: T) -> Result<GraphRefMut<'a, T>> {
-    let name = ty.source_name().value().clone();
-    let ty = Type::Custom(Box::new(ty));
-    self.types
-      .insert_graph_cell(name, ty)
-      .map(|gr| gr.map(|r| T::cast_mut(r.as_custom_mut().unwrap())))
-      .map_err(|ty| ErrorKind::DuplicateDefinition(
-        ty.source_name().value().clone(),
-        ty.item_name(),
-      ).into())
-  }
-
   /// This uses the mutable reference, so no other
   /// references can be active when calling this.
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, T>> {
