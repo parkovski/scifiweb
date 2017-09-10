@@ -1,0 +1,19 @@
+{
+  "program": "./vm/dot_scifi/simple.scifi",
+  "server": {
+    "httpAddr": "127.0.0.1:43080",
+    "httpsAddr": "127.0.0.1:43081",
+    "wsAddr": "127.0.0.1:43082",
+    "wssAddr": "127.0.0.1:43083"
+  },
+  "log": {
+    "file": null,
+    "level": "trace",
+    "timeFormat": "%F %T%z",
+    "showModule": true
+  },
+  "out": {
+    "cs": "./vm/dot_scifi/out/csharp",
+    "sql": "./vm/dot_scifi/out/sql"
+  }
+}
