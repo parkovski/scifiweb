@@ -6,6 +6,7 @@ pub use self::token::{TokenSpan, TokenValue};
 
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::path::Path;
+use serde_json;
 use ast::Ast;
 use util::graph_cell::GraphCell;
 
@@ -135,6 +136,6 @@ pub use self::parse_errors::{
 
 pub fn compile_graph<'a>(filename: &Path) -> ParseResult<Box<GraphCell<Ast<'a>>>> {
   let ast = parser_rd::Parser::parse(filename)?;
-  println!("{:#?}", &ast.awake());
+  println!("{}", serde_json::to_string_pretty(&*ast.awake()).unwrap());
   Ok(ast)
 }

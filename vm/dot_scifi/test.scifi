@@ -30,13 +30,12 @@ Coin collectable:
   ];
 end;
 
-CoinRewards object:
-  amount of collectable Coin
-  for collectable Level = 10 + 2 * amount;
+CoinRewards function(player Player) -> integer:
+  -> 10 + 2 * player.Level.amount;
 end;
 
 Foobar object:
-  property test of collectable Foo
+  property test of Foo
   for collectable Bar
   with [
     'Hello' for amount 1,
@@ -62,16 +61,15 @@ Chest collectable group:
   ];
 end;
 
-OpenSmallChest event:
-  params(chest collectable SmallChest);
-  authorize user chest.owner;
+OpenSmallChest event(chest SmallChest) <- Player:
+  authorize chest.owner;
   assert !chest.waitingToOpen;
   set chest.waitingToOpen = on;
-  option(
+  option:
     set t = timer 3 hours;
-  ) or (
+  or:
     cost Gem x 10 * t.timeRemaining in hours;
-  );
+  end;
   award random SmallChestRewards to chest.owner;
   award -chest;
 end;

@@ -5,7 +5,7 @@ use super::*;
 use super::errors::*;
 use super::ty::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Variable<'a> {
   name: TokenValue<Arc<str>>,
   ty: ItemRef<'a, Type<'a>>,

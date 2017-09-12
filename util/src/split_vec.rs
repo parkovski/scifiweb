@@ -2,6 +2,8 @@ use std::iter::FromIterator;
 use std::slice::Iter;
 use std::ops::Deref;
 use std::fmt::{self, Display, Debug};
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeStruct;
 
 /// A `Vec` type that maintains a simple sorting order:
 /// items are either on the left or right. The order is
@@ -164,6 +166,15 @@ impl<T: Debug> Debug for SplitVec<T> {
 impl<T: Debug + Display> Display for SplitVec<T> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     Debug::fmt(self, f)
+  }
+}
+
+impl<T: Serialize> Serialize for SplitVec<T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_struct("SplitVec", 2)?;
+    state.serialize_field("split_index", &self.split_index)?;
+    state.serialize_field("vec", &self.vec)?;
+    state.end()
   }
 }
 

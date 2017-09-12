@@ -13,10 +13,10 @@ extern crate log;
 extern crate fxhash;
 #[macro_use]
 extern crate error_chain;
-//extern crate serde;
-//#[macro_use]
-//extern crate serde_derive;
-//extern crate serde_json;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 #[macro_use]
 extern crate bitflags;
 extern crate scifi_util as util;

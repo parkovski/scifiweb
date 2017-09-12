@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use compile::{TokenSpan, TokenValue};
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct ArrayName {
   pub length: Option<u32>,
   pub type_name: Option<TokenValue<Arc<str>>>,

@@ -9,6 +9,7 @@ extern crate log;
 extern crate termcolor;
 extern crate fxhash;
 extern crate chrono;
+extern crate serde;
 
 pub mod future;
 pub mod graph_cell;
@@ -24,6 +25,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::{HashMap, Entry};
 use std::hash::{Hash, BuildHasher};
 use fxhash::FxHashSet;
+use serde::ser::{Serialize, Serializer, SerializeTupleStruct};
 use futures::Future;
 use future::SFFuture;
 use self::graph_cell::{GraphCell, GraphRefMut};
@@ -83,6 +85,12 @@ impl Borrow<str> for SharedStringWrapper {
   }
 }
 
+impl Serialize for SharedStringWrapper {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    <Self as Borrow<str>>::borrow(self).serialize(serializer)
+  }
+}
+
 #[derive(Debug)]
 pub struct SharedStrings {
   strings: RefCell<FxHashSet<SharedStringWrapper>>,
@@ -101,6 +109,14 @@ impl SharedStrings {
     let ss: Arc<str> = s.into();
     strings.insert(SharedStringWrapper(ss.clone()));
     ss
+  }
+}
+
+impl Serialize for SharedStrings {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_tuple_struct("SharedStrings", 1)?;
+    state.serialize_field(&*self.strings.borrow())?;
+    state.end()
   }
 }
 

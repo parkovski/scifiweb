@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::mem;
 use std::iter::Iterator;
+use serde::ser::{Serialize, Serializer, SerializeTupleVariant};
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
 use super::var::Variable;
@@ -22,7 +23,7 @@ pub use self::object::*;
 pub use self::user::*;
 
 /// Primitive types usable as-is.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum PrimitiveType {
   Void,
   Switch,
@@ -98,7 +99,7 @@ named_display!(PrimitiveType);
 
 /// "Generic" types that form the base
 /// of user defined instances.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum BaseCustomType {
   Array,
   Object,
@@ -211,6 +212,14 @@ pub trait CustomType<'a>
 
   /// For casting
   fn _self_ptr(&self) -> *const usize { self as *const _ as *const usize }
+}
+
+impl<'a> Serialize for CustomType<'a> + 'a {
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
+    serializer.serialize_str(&format!("{:?}", self))
+  }
 }
 
 /// This is safe as long as no type provides
@@ -365,6 +374,25 @@ impl<'a> SourceItem for Type<'a> {
     match *self {
       Type::Primitive(_, _) => Ok(()),
       Type::Custom(ref mut ty) => ty.typecheck(),
+    }
+  }
+}
+
+impl<'a> Serialize for Type<'a> {
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
+    match *self {
+      Type::Primitive(ref t, _) => {
+        let mut tv = serializer.serialize_tuple_variant("Type", 0, "Primitive", 1)?;
+        tv.serialize_field(t)?;
+        tv.end()
+      }
+      Type::Custom(ref t) => {
+        let mut tv = serializer.serialize_tuple_variant("Type", 1, "Custom", 1)?;
+        tv.serialize_field(&**t)?;
+        tv.end()
+      }
     }
   }
 }

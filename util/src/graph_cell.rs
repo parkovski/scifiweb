@@ -6,6 +6,8 @@ use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Display};
 use std::mem;
+use serde::{Serialize, Serializer};
+use serde::ser::{SerializeStruct, SerializeTupleStruct};
 
 // =====
 
@@ -89,6 +91,10 @@ impl<T: ?Sized> GraphCell<T> {
     }
   }
 
+  pub fn awake_ref<'a>(&self) -> GraphRefAwake<'a, T> where Self: 'a {
+    self.awake()
+  }
+
   pub fn awake_mut<'a>(&self) -> GraphRefAwakeMut<'a, T> where Self: 'a {
     acquire_for_write(&self.borrow_count);
     unsafe {
@@ -160,6 +166,15 @@ impl<T: Hash + ?Sized> Hash for GraphCell<T> {
 impl<T: CoerceUnsized<U>, U> CoerceUnsized<GraphCell<U>> for GraphCell<T>
 {}
 
+impl<T: Serialize> Serialize for GraphCell<T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_struct("GraphCell", 2)?;
+    state.serialize_field("data", unsafe { &*self.data.get() })?;
+    state.serialize_field("ptr", &format!("{:p}", self.data.get()))?;
+    state.end()
+  }
+}
+
 // =====
 
 #[derive(Debug)]
@@ -177,6 +192,10 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
         borrow_count: &*(self.borrow_count as *const _),
       }
     }
+  }
+
+  pub fn awake_ref(&self) -> GraphRefAwake<'a, T> {
+    self.awake()
   }
 
   fn map_data<F, U>(&self, map_fn: F) -> U
@@ -241,6 +260,14 @@ where
   T: Unsize<U> + ?Sized + 'a,
   U: ?Sized + 'a,
 {}
+
+impl<'a, T: ?Sized + 'a> Serialize for GraphRef<'a, T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_tuple_struct("GraphRef", 1)?;
+    state.serialize_field(&format!("{:p}", self.data))?;
+    state.end()
+  }
+}
 
 // =====
 
@@ -341,6 +368,14 @@ where
   U: ?Sized + 'a,
 {}
 
+impl<'a, T: ?Sized + 'a> Serialize for GraphRefMut<'a, T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_tuple_struct("GraphRefMut", 1)?;
+    state.serialize_field(&format!("{:p}", self.data))?;
+    state.end()
+  }
+}
+
 // =====
 
 pub struct GraphRefAwake<'a, T: ?Sized + 'a> {
@@ -404,6 +439,14 @@ where
   T: Unsize<U> + ?Sized + 'a,
   U: ?Sized + 'a,
 {}
+
+impl<'a, T: ?Sized + Serialize + 'a> Serialize for GraphRefAwake<'a, T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_tuple_struct("GraphRefAwake", 1)?;
+    state.serialize_field(self.data)?;
+    state.end()
+  }
+}
 
 // =====
 
@@ -488,3 +531,11 @@ where
   T: Unsize<U> + ?Sized + 'a,
   U: ?Sized + 'a,
 {}
+
+impl<'a, T: ?Sized + Serialize + 'a> Serialize for GraphRefAwakeMut<'a, T> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_tuple_struct("GraphRefAwakeMut", 1)?;
+    state.serialize_field(self.data)?;
+    state.end()
+  }
+}

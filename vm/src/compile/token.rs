@@ -7,8 +7,9 @@ use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::default::Default;
 use fxhash::FxHashMap;
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct TokenSpan {
   pub filename: Arc<PathBuf>,
   pub line: usize,
@@ -44,7 +45,7 @@ impl Display for TokenSpan {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize)]
 pub struct Token<'a> {
   pub kind: TokenKind<'a>,
   pub span: TokenSpan,
@@ -62,7 +63,7 @@ impl<'a> fmt::Display for Token<'a> {
   }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Serialize)]
 pub enum TokenKind<'a> {
   Invalid(char),
   Eof,
@@ -255,6 +256,20 @@ where
   }
 }
 
+impl<T> Serialize for TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq + Serialize,
+{
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
+    let mut state = serializer.serialize_struct("TokenValue", 2)?;
+    state.serialize_field("value", &format!("{}", self.value))?;
+    state.serialize_field("span", &self.span)?;
+    state.end()
+  }
+}
+
 /// For tokens that have values inside them.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenMatch {
@@ -338,7 +353,7 @@ impl<'a> PartialEq<TokenMatch> for Token<'a> {
 
 macro_rules! keywords {
   ( $map:ident, $typ:ident, $($s:expr => $enm:ident),+ ) => (
-    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
     pub enum $typ {
       $($enm),+
     }

@@ -51,13 +51,13 @@ pub trait Owner<'a, T: SourceItem + 'a> {
 
 // =====
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ItemRef<'a, T: SourceItem + 'a> {
   name: TokenValue<Arc<str>>,
   item: Option<GraphRef<'a, T>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ItemRefMut<'a, T: SourceItem + 'a> {
   name: TokenValue<Arc<str>>,
   item: Option<GraphRefMut<'a, T>>,
@@ -146,13 +146,14 @@ impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
 
 // =====
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
   array_names: FxHashMap<ArrayName, Arc<str>>,
   //globals: FxHashMap<Arc<str>, GraphCell<var::Variable<'a>>>,
   strings: SharedStrings,
   /// The path "(internal)" for things with no code location.
+  #[serde(skip)]
   internal_path: Arc<PathBuf>,
 }
 
