@@ -163,6 +163,11 @@ where
   span: TokenSpan,
 }
 
+impl<T> Eq for TokenValue<T>
+where
+  T: Debug + Display + Clone + PartialEq + Eq
+{}
+
 impl<T> TokenValue<T>
 where
   T: Debug + Display + Clone + PartialEq,

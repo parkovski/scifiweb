@@ -86,6 +86,16 @@ mod parse_errors {
         description("syntax error")
         display("syntax error: {} at {}", &message, &location)
       }
+
+      InvalidOperation(operation: &'static str, location: TokenSpan) {
+        description("invalid operation")
+        display("invalid operation {} at {}", operation, &location)
+      }
+
+      IntegerOutOfRange(integer: TokenValue<i64>, reason: &'static str) {
+        description("integer out of range")
+        display("integer out of range {}, {}", &integer, reason)
+      }
     }
 
     foreign_links {

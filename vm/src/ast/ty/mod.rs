@@ -136,19 +136,20 @@ impl BaseCustomType {
   ) -> Result<()>
   {
     match *self {
-      BaseCustomType::Array
-        => return Err(ErrorKind::InvalidOperation(
+      BaseCustomType::Array => {
+        return Err(ErrorKind::InvalidOperation(
           "custom array types are defined inline"
-        ).into()),
-      BaseCustomType::Object => Ast::insert_type(ast, Object::new(name))?,
-      BaseCustomType::Collectable => Ast::insert_type(ast, Collectable::new(name))?,
-      BaseCustomType::CollectableGroup => Ast::insert_type(ast, CollectableGroup::new(name))?,
-      BaseCustomType::User => Ast::insert_type(ast, User::new(name))?,
-      BaseCustomType::UserGroup => Ast::insert_type(ast, UserGroup::new(name))?,
-      BaseCustomType::Event => Ast::insert_type(ast, Event::new(name))?,
-      BaseCustomType::RemoteEvent => Ast::insert_type(ast, RemoteEvent::new(name))?,
-      BaseCustomType::Function => Ast::insert_type(ast, Function::new(name))?,
-      BaseCustomType::RemoteFunction => Ast::insert_type(ast, RemoteFunction::new(name))?,
+        ).into());
+      }
+      BaseCustomType::Object => { Ast::insert_type(ast, Object::new(name))?; }
+      BaseCustomType::Collectable => { Ast::insert_type(ast, Collectable::new(name))?; }
+      BaseCustomType::CollectableGroup => { Ast::insert_type(ast, CollectableGroup::new(name))?; }
+      BaseCustomType::User => { Ast::insert_type(ast, User::new(name))?; }
+      BaseCustomType::UserGroup => { Ast::insert_type(ast, UserGroup::new(name))?; }
+      BaseCustomType::Event => { Ast::insert_type(ast, Event::new(name))?; }
+      BaseCustomType::RemoteEvent => { Ast::insert_type(ast, RemoteEvent::new(name))?; }
+      BaseCustomType::Function => { Ast::insert_type(ast, Function::new(name))?; }
+      BaseCustomType::RemoteFunction => { Ast::insert_type(ast, RemoteFunction::new(name))?; }
     }
     Ok(())
   }

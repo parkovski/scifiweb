@@ -22,17 +22,22 @@ pub enum AutoGrouping {
 #[derive(Debug)]
 pub struct CollectableGroup<'a> {
   name: TokenValue<Arc<str>>,
+
   self_ref: Later<GraphRef<'a, CollectableGroup<'a>>>,
   ast_ref: Later<GraphRef<'a, Ast<'a>>>,
+
   auto_grouping: AutoGrouping,
+
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
+
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
+
   collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
   sub_groups: FxHashMap<Arc<str>, ItemRefMut<'a, CollectableGroup<'a>>>,
-}
 
-impl_name_traits!((<'a>) CollectableGroup (<'a>));
-named_display!((<'a>) CollectableGroup (<'a>));
+  upgrades: Option<Vec<Upgrade>>,
+  redemptions: Option<Vec<Redemption>>,
+}
 
 impl<'a> CollectableGroup<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -45,6 +50,8 @@ impl<'a> CollectableGroup<'a> {
       properties: Default::default(),
       collectables: Default::default(),
       sub_groups: Default::default(),
+      upgrades: None,
+      redemptions: None,
     }
   }
 
@@ -74,7 +81,24 @@ impl<'a> CollectableGroup<'a> {
       .insert_unique(r.source_name().value().clone(), r)
       .map_err(|(name, _)| ErrorKind::DuplicateDefinition(name, "collectable").into())
   }
+
+  pub fn insert_group_ref(&mut self, r: ItemRefMut<'a, CollectableGroup<'a>>) -> Result<()> {
+    self.sub_groups
+      .insert_unique(r.source_name().value().clone(), r)
+      .map_err(|(name, _)| ErrorKind::DuplicateDefinition(name, "collectable group").into())
+  }
+
+  pub fn insert_upgrades(&mut self, upgrades: Vec<Upgrade>) {
+    self.upgrades = Some(upgrades);
+  }
+
+  pub fn insert_redemptions(&mut self, redemptions: Vec<Redemption>) {
+    self.redemptions = Some(redemptions);
+  }
 }
+
+impl_name_traits!((<'a>) CollectableGroup (<'a>));
+named_display!((<'a>) CollectableGroup (<'a>));
 
 impl<'a> SourceItem for CollectableGroup<'a> {
   fn source_name(&self) -> &TokenValue<Arc<str>> {
@@ -154,12 +178,9 @@ pub struct Collectable<'a> {
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
   auto_grouping: AutoGrouping,
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
-  // upgrades
-  // redemptions
+  upgrades: Option<Vec<Upgrade>>,
+  redemptions: Option<Vec<Redemption>>,
 }
-
-impl_name_traits!((<'a>)Collectable(<'a>));
-named_display!((<'a>)Collectable(<'a>));
 
 impl<'a> Collectable<'a> {
   pub fn new(
@@ -172,6 +193,8 @@ impl<'a> Collectable<'a> {
       parent: None,
       auto_grouping: AutoGrouping::Inherit,
       properties: Default::default(),
+      upgrades: None,
+      redemptions: None,
     }
   }
 
@@ -195,7 +218,18 @@ impl<'a> Collectable<'a> {
       ),
     }
   }
+
+  pub fn insert_upgrades(&mut self, upgrades: Vec<Upgrade>) {
+    self.upgrades = Some(upgrades);
+  }
+
+  pub fn insert_redemptions(&mut self, redemptions: Vec<Redemption>) {
+    self.redemptions = Some(redemptions);
+  }
 }
+
+impl_name_traits!((<'a>)Collectable(<'a>));
+named_display!((<'a>)Collectable(<'a>));
 
 impl<'a> SourceItem for Collectable<'a> {
   fn source_name(&self) -> &TokenValue<Arc<str>> {
@@ -247,5 +281,27 @@ impl<'a> SubType<'a, CollectableGroup<'a>> for Collectable<'a> {
 
   fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, CollectableGroup<'a>>) {
     self.parent = Some(super_type);
+  }
+}
+
+#[derive(Debug)]
+pub struct Upgrade {
+  level: u32,
+}
+
+impl Upgrade {
+  pub fn new(level: u32) -> Self {
+    Upgrade { level }
+  }
+}
+
+#[derive(Debug)]
+pub struct Redemption {
+  amount: u32,
+}
+
+impl Redemption {
+  pub fn new(amount: u32) -> Self {
+    Redemption { amount }
   }
 }

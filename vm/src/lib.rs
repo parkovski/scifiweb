@@ -2,6 +2,7 @@
 #![feature(conservative_impl_trait)]
 #![feature(box_syntax, box_patterns)]
 #![feature(match_beginning_vert)]
+#![feature(try_from)]
 
 #[macro_use]
 extern crate nom;

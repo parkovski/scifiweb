@@ -1,14 +1,37 @@
 use std::sync::Arc;
-use util::graph_cell::*;
+use std::fmt::{self, Display};
 use compile::{TokenSpan, TokenValue};
 use super::*;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ArrayName {
+  pub length: Option<u32>,
+  pub type_name: Option<TokenValue<Arc<str>>>,
+}
+
+impl ArrayName {
+  pub fn new(length: Option<u32>, type_name: Option<TokenValue<Arc<str>>>) -> Self {
+    ArrayName { length, type_name }
+  }
+}
+
+impl Display for ArrayName {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match (self.length, &self.type_name) {
+      (Some(ref len), &Some(ref name)) => write!(f, "array x {} of {}", len, &name.value()),
+      (Some(len), &None) => write!(f, "array x {}", len),
+      (None, &Some(ref name)) => write!(f, "array of {}", &name.value()),
+      (None, &None) => write!(f, "array"),
+    }
+  }
+}
 
 /// An ordered sequence of values, optionally with custom bounds
 /// and a specific type.
 #[derive(Debug)]
 pub struct Array<'a> {
   name: TokenValue<Arc<str>>,
-  ty: Option<GraphRef<'a, Type<'a>>>,
+  ty: Option<ItemRef<'a, Type<'a>>>,
   /// This can't be usize because we don't know what hardware this will need
   /// to be shared with. Also, given what this system is, if you want
   /// a bigger array, you're wrong.
@@ -19,21 +42,13 @@ impl_name_traits!((<'a>) Array (<'a>));
 named_display!((<'a>) Array (<'a>));
 
 impl<'a> Array<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
-    Array { name, ty: None, max_length: None }
-  }
-
-  pub fn make_name(length: Option<u32>, type_name: Option<&str>) -> Arc<str> {
-    let mut s = String::from("array");
-    if let Some(length) = length {
-      s.push_str(" x ");
-      s.push_str(&length.to_string());
-    }
-    if let Some(type_name) = type_name {
-      s.push_str(" of ");
-      s.push_str(type_name);
-    }
-    s.into()
+  pub fn new(
+    name: TokenValue<Arc<str>>,
+    ty: Option<ItemRef<'a, Type<'a>>>,
+    max_length: Option<u32>,
+  ) -> Self
+  {
+    Array { name, ty, max_length }
   }
 }
 

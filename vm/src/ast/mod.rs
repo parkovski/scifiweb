@@ -73,9 +73,9 @@ macro_rules! item_ref_impls {
         }
       }
 
-      pub fn with_item(item: $graph_ref<'a, T>) -> Self {
+      pub fn with_item(name: TokenValue<Arc<str>>, item: $graph_ref<'a, T>) -> Self {
         $t {
-          name: item.$awake().source_name().clone(),
+          name,
           item: Some(item),
         }
       }
@@ -83,6 +83,10 @@ macro_rules! item_ref_impls {
       pub fn resolve<O>(&mut self, owner: &O) -> Result<$graph_ref<'a, T>>
       where O: Owner<'a, T> + Debug + 'a
       {
+        if let Some(ref item) = self.item {
+          return Ok(item.clone());
+        }
+
         match owner.$find(&self.name) {
           Some(r) => {
             self.item = Some(r.clone());
@@ -90,7 +94,7 @@ macro_rules! item_ref_impls {
           }
           None => Err(ErrorKind::NotDefined(
             self.name.value().clone(),
-            "ref" // T::BASE_TYPE
+            "forward reference" // T::BASE_TYPE
           ).into()),
         }
       }
@@ -106,7 +110,7 @@ macro_rules! item_ref_impls {
       }
 
       fn item_name(&self) -> &'static str {
-        "ref"
+        "forward reference"
       }
     }
 
@@ -145,6 +149,7 @@ impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
 #[derive(Debug)]
 pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
+  array_names: FxHashMap<ArrayName, Arc<str>>,
   //globals: FxHashMap<Arc<str>, GraphCell<var::Variable<'a>>>,
   strings: SharedStrings,
   /// The path "(internal)" for things with no code location.
@@ -155,6 +160,7 @@ impl<'a> Ast<'a> {
   pub fn new() -> Box<GraphCell<Self>> {
     let ast = box GraphCell::new(Ast {
       types: Default::default(),
+      array_names: Default::default(),
       //globals: Default::default(),
       strings: SharedStrings::new(),
       internal_path: Arc::new(Path::new("(internal)").into()),
@@ -188,11 +194,13 @@ impl<'a> Ast<'a> {
   }
 
   pub fn typecheck(&self) -> Result<()> {
+    trace!("Resolve references");
     self.resolution_step(SourceItem::resolve)?;
+    trace!("Typecheck");
     self.resolution_step(SourceItem::typecheck)
   }
 
-  pub fn insert_type<T>(this: GraphRefMut<'a, Ast<'a>>, ty: T) -> Result<()>
+  pub fn insert_type<T>(this: GraphRefMut<'a, Ast<'a>>, ty: T) -> Result<GraphRefMut<'a, Type<'a>>>
   where T: CustomType<'a> + CastType<'a> + 'a
   {
     let name = ty.source_name().value().clone();
@@ -213,7 +221,40 @@ impl<'a> Ast<'a> {
     let t_mut = type_ref.map(|r| T::cast_mut(r.as_custom_mut().unwrap()));
     let t_ref = t_mut.asleep_ref();
     t_mut.awake_mut().init_cyclic(t_ref, self_ref);
-    Ok(())
+    Ok(type_ref)
+  }
+
+  pub fn get_array(
+    this: GraphRefMut<'a, Ast<'a>>,
+    name: ArrayName,
+  ) -> GraphRef<'a, Type<'a>>
+  {
+    let opt_str_name = this.awake_ref().array_names.get(&name).map(|n| n.clone());
+    let str_name = if let Some(stored) = opt_str_name {
+      stored
+    } else {
+      let stored: Arc<str> = name.to_string().into();
+      this.awake_mut().array_names.insert(name.clone(), stored.clone());
+      stored
+    };
+    let opt_array = <Self as Owner<Type>>::find(&this.awake_ref(), &str_name);
+    if let Some(array) = opt_array {
+      // It's either the primitive type "array" or something with a name
+      // only an array can have.
+      debug_assert!(
+        array
+          .awake()
+          .as_custom()
+          .map(|a| a.base_type() == BaseCustomType::Array)
+          .unwrap_or(true)
+      );
+      array
+    } else {
+      let tv = TokenValue::new(str_name, TokenSpan::new(this.awake_ref().internal_path.clone()));
+      let ty = name.type_name.map(|n| ItemRef::new(n.clone()));
+      let array = Array::new(tv, ty, name.length);
+      Self::insert_type(this, array).unwrap().asleep_ref()
+    }
   }
 }
 

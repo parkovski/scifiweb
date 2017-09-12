@@ -1,6 +1,9 @@
 Card collectable group:
   has amount;
+  property foo array of integer;
+  property bar array x 10 of array of CommonCard;
   has collectable group [CommonCard, RareCard];
+  has upgrades;
 end;
 
 CommonCard collectable group:
