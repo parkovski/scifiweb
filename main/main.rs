@@ -15,11 +15,15 @@ extern crate scifi_vm as vm;
 extern crate scifi_util as util;
 
 mod config;
+mod options;
 
 use std::path::Path;
+use std::fs::File;
 use docopt::Docopt;
 use model_mem::MemoryAccessor;
+use vm::ast::Ast;
 use self::config::{Config, DEFAULT_CONFIG_PATH};
+use self::options::DebugOptions;
 
 const USAGE: &'static str = "
 SciFiWeb Game Management Server
@@ -37,6 +41,7 @@ Options:
   -c <key=value> ...              Override a configuration option.
   -t <target> --target=<target>   Specify the build target.
                                   Valid targets: all, csharp, sql, initdb.
+  -z <debug-options> ...          Set a debug option.
 
 Command overview:
   (none)      Start a server for the program listed in the configuration file.
@@ -68,6 +73,7 @@ struct Args {
   flag_config: Option<String>,
   flag_c: Vec<String>,
   flag_target: Option<Target>,
+  flag_z: DebugOptions,
 }
 
 fn init_logger(config: &Config) {
@@ -82,6 +88,20 @@ fn init(dir: &str) {
   Config::write(&path, &c).unwrap_or_else(|e| {
     error!("{}", e);
   });
+}
+
+fn write_ast<'a>(ast: &Ast<'a>) {
+  let file = match File::create(Path::new("./ast.json")) {
+    Ok(f) => f,
+    Err(e) => {
+      error!("{}", e);
+      return;
+    }
+  };
+  match serde_json::to_writer_pretty(file, &ast) {
+    Ok(_) => info!("Wrote ast to ./ast.json"),
+    Err(e) => error!("{}", e),
+  }
 }
 
 fn main() {
@@ -112,7 +132,12 @@ fn main() {
   if args.cmd_build {
     trace!("Starting build for {}, target {:?}", &config.program, args.flag_target);
     match vm::compile_graph(Path::new(&config.program)) {
-      Ok(_) => info!("Loaded program."),
+      Ok(ast) => {
+        info!("Loaded program.");
+        if args.flag_z.save_ast {
+          write_ast(&ast.awake_ref());
+        }
+      }
       Err(e) => error!("{}", e),
     }
   } else {

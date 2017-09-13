@@ -212,7 +212,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
             }
             | BaseCustomType::Array
               => return self.e_syntax("custom array types are defined inline"),
-            | _ => unimplemented!(),
           }
           self.parse_end()?;
         }
