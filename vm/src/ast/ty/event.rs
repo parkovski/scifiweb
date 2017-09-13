@@ -4,7 +4,7 @@ use ast::var::Variable;
 use compile::{TokenSpan, TokenValue};
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Event<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,
@@ -55,7 +55,7 @@ impl<'a> CustomType<'a> for Event<'a> {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RemoteEvent<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,

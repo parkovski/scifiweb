@@ -149,6 +149,7 @@ impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
 #[derive(Debug, Serialize)]
 pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
+  #[serde(skip)]
   array_names: FxHashMap<ArrayName, Arc<str>>,
   //globals: FxHashMap<Arc<str>, GraphCell<var::Variable<'a>>>,
   strings: SharedStrings,

@@ -4,7 +4,7 @@ use ast::var::Variable;
 use compile::{TokenSpan, TokenValue};
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Function<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,
@@ -55,7 +55,7 @@ impl<'a> CustomType<'a> for Function<'a> {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct RemoteFunction<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,

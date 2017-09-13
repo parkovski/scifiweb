@@ -6,7 +6,7 @@ use compile::{TokenSpan, TokenValue};
 use ast::var::Variable;
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Object<'a> {
   name: TokenValue<Arc<str>>,
   dynamic: bool,

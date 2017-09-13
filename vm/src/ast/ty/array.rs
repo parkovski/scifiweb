@@ -28,7 +28,7 @@ impl Display for ArrayName {
 
 /// An ordered sequence of values, optionally with custom bounds
 /// and a specific type.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Array<'a> {
   name: TokenValue<Arc<str>>,
   ty: Option<ItemRef<'a, Type<'a>>>,

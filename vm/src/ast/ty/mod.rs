@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 use std::mem;
 use std::iter::Iterator;
 use serde::ser::{Serialize, Serializer, SerializeTupleVariant};
+use serde_json;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
 use super::var::Variable;
@@ -195,6 +196,7 @@ bitflags! {
 pub trait CustomType<'a>
   : Debug
   + Display
+  + ToJson
   + Named
   + SourceItem
 {
@@ -214,11 +216,24 @@ pub trait CustomType<'a>
   fn _self_ptr(&self) -> *const usize { self as *const _ as *const usize }
 }
 
+pub trait ToJson {
+  fn to_json(&self) -> serde_json::Value;
+}
+
+impl<'a, T> ToJson for T
+where
+  T: CustomType<'a> + Sized + Serialize
+{
+  fn to_json(&self) -> serde_json::Value {
+    serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+  }
+}
+
 impl<'a> Serialize for CustomType<'a> + 'a {
   fn serialize<S: Serializer>(&self, serializer: S)
     -> ::std::result::Result<S::Ok, S::Error>
   {
-    serializer.serialize_str(&format!("{:?}", self))
+    self.to_json().serialize(serializer)
   }
 }
 

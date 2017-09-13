@@ -9,7 +9,7 @@ use super::*;
 /// can be joined by any type of player not in the
 /// deny list. A `Deny` group can only be joined by those
 /// types in the allow list.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum MembershipMode {
   Allow,
   Deny,
@@ -29,7 +29,7 @@ impl Default for MembershipMode {
 /// If the two have equal precedence, both will be disabled,
 /// and if either has undefined precedence, the new group
 /// will fail to add.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum Precedence<'a> {
   Undefined,
   Higher(ItemRef<'a, UserGroup<'a>>),
@@ -46,7 +46,7 @@ impl<'a> Default for Precedence<'a> {
 /// This is a classification, and not a super type of User. A user
 /// can belong to multiple user groups, which mostly just serve to
 /// establish permissions.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct UserGroup<'a> {
   name: TokenValue<Arc<str>>,
   /// Whether to allow or deny membership by default.
@@ -114,7 +114,7 @@ impl<'a> CustomType<'a> for UserGroup<'a> {
 /// User types and user groups can be targeted by remote events, but
 /// that is not specified here. Those targets are listed on the events,
 /// which will be incorporated into the generated user types for the client.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct User<'a> {
   name: TokenValue<Arc<str>>,
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,

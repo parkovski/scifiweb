@@ -10,7 +10,7 @@ use super::*;
 /// When auto grouping is on, you can only own
 /// one instance of the collectable where
 /// new awards increase the amount property.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum AutoGrouping {
   None,
   /// Defaults to `None` if the type doesn't have a parent.
@@ -19,7 +19,7 @@ pub enum AutoGrouping {
 }
 
 /// This is a super type for any of its collectables.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct CollectableGroup<'a> {
   name: TokenValue<Arc<str>>,
 
@@ -172,7 +172,7 @@ impl<'a> SubType<'a, CollectableGroup<'a>> for CollectableGroup<'a> {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Collectable<'a> {
   name: TokenValue<Arc<str>>,
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
@@ -284,7 +284,7 @@ impl<'a> SubType<'a, CollectableGroup<'a>> for Collectable<'a> {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Upgrade {
   level: u32,
 }
@@ -295,7 +295,7 @@ impl Upgrade {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Redemption {
   amount: u32,
 }
