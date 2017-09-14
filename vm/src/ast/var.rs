@@ -63,7 +63,7 @@ pub struct Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
-  pub fn global() -> GraphCell<Self> {
+  pub fn new() -> GraphCell<Self> {
     GraphCell::new(Scope {
       vars: Default::default(),
       parent: None,
@@ -86,15 +86,39 @@ impl<'a> Scope<'a> {
     }
   }
 
-  pub fn contains(&self, name: &str) -> bool {
-    self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().contains(name))
+  pub fn set_parent(&mut self, parent: GraphRefMut<'a, Scope<'a>>) -> Result<()> {
+    if self.parent.is_some() {
+      return Err(ErrorKind::InvalidOperation(
+        "can't set parent on scope that already has a parent"
+      ).into());
+    }
+    let p = parent.awake();
+    for key in self.vars.keys() {
+      if p.has_var(key) {
+        return Err(ErrorKind::DuplicateDefinition(
+          key.clone(), "variable"
+        ).into());
+      }
+    }
+    Ok(self.parent = Some(parent))
+  }
+
+  pub fn has_var(&self, name: &str) -> bool {
+    self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().has_var(name))
   }
 
   pub fn insert_var(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
-    self.vars.insert_graph_cell(var.source_name().value().clone(), var)
-      .map_err(|var| ErrorKind::DuplicateDefinition(
-          var.source_name().value().clone(), "variable"
-      ).into())
+    let error: Error = ErrorKind::DuplicateDefinition(
+        var.source_name().value().clone(), "variable"
+    ).into();
+    if let Some(parent) = self.parent {
+      if parent.awake().has_var(var.name()) {
+        return Err(error);
+      }
+    }
+    self.vars
+      .insert_graph_cell(var.source_name().value().clone(), var)
+      .map_err(move |_| error)
   }
 }
 
