@@ -81,7 +81,7 @@ impl<T: ?Sized> GraphCell<T> {
     }
   }
 
-  pub fn awake<'a>(&self) -> GraphRefAwake<'a, T> where Self: 'a {
+  pub fn awake<'a>(&'a self) -> GraphRefAwake<'a, T> where Self: 'a {
     acquire_for_read(&self.borrow_count);
     unsafe {
       GraphRefAwake {
@@ -91,7 +91,7 @@ impl<T: ?Sized> GraphCell<T> {
     }
   }
 
-  pub fn awake_mut<'a>(&self) -> GraphRefAwakeMut<'a, T> where Self: 'a {
+  pub fn awake_mut<'a>(&'a self) -> GraphRefAwakeMut<'a, T> where Self: 'a {
     acquire_for_write(&self.borrow_count);
     unsafe {
       GraphRefAwakeMut {
@@ -180,7 +180,7 @@ pub struct GraphRef<'a, T: ?Sized + 'a> {
 }
 
 impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
-  pub fn awake(&self) -> GraphRefAwake<'a, T> {
+  pub fn awake<'b>(&'b self) -> GraphRefAwake<'b, T> where 'a: 'b {
     acquire_for_read(self.borrow_count);
     unsafe {
       GraphRefAwake {
@@ -190,20 +190,23 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
     }
   }
 
-  fn map_data<F, U>(&self, map_fn: F) -> U
+  fn map_data<'b, F, U>(&self, map_fn: F) -> U
   where
-    F: FnOnce(&'a T) -> U,
+    'a: 'b,
+    F: FnOnce(&'b T) -> U + 'b,
+    U: 'b,
   {
     acquire_for_read(self.borrow_count);
-    let ref_data: &'a T = unsafe { &*self.data };
+    let ref_data: &'b T = unsafe { &*self.data };
     let new_data = map_fn(ref_data);
     self.borrow_count.set(self.borrow_count.get() - 1);
     new_data
   }
 
-  pub fn map<F, U>(&self, map_fn: F) -> GraphRef<'a, U>
+  pub fn map<'b, F, U>(&'b self, map_fn: F) -> GraphRef<'a, U>
   where
-    F: FnOnce(&'a T) -> &'a U,
+    'a: 'b,
+    F: FnOnce(&'b T) -> &'b U + 'b,
     U: 'a,
   {
     let new_data = self.map_data(map_fn) as *const _;
@@ -213,9 +216,10 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
     }
   }
 
-  pub fn map_opt<F, U>(&self, map_fn: F) -> Option<GraphRef<'a, U>>
+  pub fn map_opt<'b, F, U>(&'b self, map_fn: F) -> Option<GraphRef<'a, U>>
   where
-    F: FnOnce(&'a T) -> Option<&'a U>,
+    'a: 'b,
+    F: (FnOnce(&'b T) -> Option<&'b U>) + 'b,
     U: 'a,
   {
     self.map_data(map_fn).map(|data| GraphRef {
@@ -224,10 +228,12 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
     })
   }
 
-  pub fn map_res<F, U, E>(&self, map_fn: F) -> Result<GraphRef<'a, U>, E>
+  pub fn map_res<'b, F, U, E>(&'b self, map_fn: F) -> Result<GraphRef<'a, U>, E>
   where
-    F: FnOnce(&'a T) -> Result<&'a U, E>,
+    'a: 'b,
+    F: FnOnce(&'b T) -> Result<&'b U, E> + 'b,
     U: 'a,
+    E: 'b,
   {
     self.map_data(map_fn).map(|data| GraphRef {
       data: data as *const _,
@@ -277,7 +283,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     }
   }
 
-  pub fn awake(&self) -> GraphRefAwake<'a, T> {
+  pub fn awake<'b>(&'b self) -> GraphRefAwake<'b, T> where 'a: 'b {
     acquire_for_read(self.borrow_count);
     unsafe {
       GraphRefAwake {
@@ -287,7 +293,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     }
   }
 
-  pub fn awake_mut(&self) -> GraphRefAwakeMut<'a, T> {
+  pub fn awake_mut<'b>(&'b self) -> GraphRefAwakeMut<'b, T> where 'a: 'b {
     acquire_for_write(self.borrow_count);
     unsafe {
       GraphRefAwakeMut {
@@ -297,9 +303,11 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     }
   }
 
-  fn map_data<F, U>(&self, map_fn: F) -> U
+  fn map_data<'b, F, U>(&self, map_fn: F) -> U
   where
-    F: FnOnce(&'a mut T) -> U,
+    'a: 'b,
+    F: FnOnce(&'b mut T) -> U + 'b,
+    U: 'b,
   {
     acquire_for_write(self.borrow_count);
     let ref_data: &'a mut T = unsafe { &mut *self.data };
@@ -308,9 +316,10 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     new_data
   }
 
-  pub fn map<F, U>(&self, map_fn: F) -> GraphRefMut<'a, U>
+  pub fn map<'b, F, U>(&'b self, map_fn: F) -> GraphRefMut<'a, U>
   where
-    F: FnOnce(&'a mut T) -> &'a mut U,
+    'a: 'b,
+    F: FnOnce(&'b mut T) -> &'b mut U + 'b,
     U: 'a,
   {
     let new_data = self.map_data(map_fn) as *mut _;
@@ -320,9 +329,10 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     }
   }
 
-  pub fn map_opt<F, U>(&self, map_fn: F) -> Option<GraphRefMut<'a, U>>
+  pub fn map_opt<'b, F, U>(&'b self, map_fn: F) -> Option<GraphRefMut<'a, U>>
   where
-    F: FnOnce(&'a mut T) -> Option<&'a mut U>,
+    'a: 'b,
+    F: (FnOnce(&'b mut T) -> Option<&'b mut U>) + 'b,
     U: 'a,
   {
     self.map_data(map_fn).map(|data| GraphRefMut {
@@ -331,10 +341,12 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     })
   }
 
-  pub fn map_res<F, U, E>(&self, map_fn: F) -> Result<GraphRefMut<'a, U>, E>
+  pub fn map_res<'b, F, U, E>(&'b self, map_fn: F) -> Result<GraphRefMut<'a, U>, E>
   where
-    F: FnOnce(&'a mut T) -> Result<&'a mut U, E>,
+    'a: 'b,
+    F: FnOnce(&'b mut T) -> Result<&'b mut U, E> + 'b,
     U: 'a,
+    E: 'b,
   {
     self.map_data(map_fn).map(|data| GraphRefMut {
       data: data as *mut _,

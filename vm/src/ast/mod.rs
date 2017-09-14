@@ -82,7 +82,7 @@ macro_rules! item_ref_impls {
       }
 
       pub fn resolve<O>(&mut self, owner: &O) -> Result<$graph_ref<'a, T>>
-      where O: Owner<'a, T> + Debug + 'a
+      where O: Owner<'a, T> + Debug
       {
         if let Some(ref item) = self.item {
           return Ok(item.clone());
@@ -168,13 +168,15 @@ impl<'a> Ast<'a> {
       strings: SharedStrings::new(),
       internal_path: Arc::new(Path::new("(internal)").into()),
     });
-    let mut ast_ref = ast.awake_mut();
-    let pt_span = TokenSpan::new(ast_ref.internal_path());
-    for pt in PrimitiveType::iter() {
-      let name = ast_ref.shared_string(pt.name());
-      let tkval = TokenValue::new(name.clone(), pt_span.clone());
-      let ty = Type::Primitive(pt, tkval);
-      ast_ref.types.insert(name, GraphCell::new(ty));
+    {
+      let mut ast_ref = ast.awake_mut();
+      let pt_span = TokenSpan::new(ast_ref.internal_path());
+      for pt in PrimitiveType::iter() {
+        let name = ast_ref.shared_string(pt.name());
+        let tkval = TokenValue::new(name.clone(), pt_span.clone());
+        let ty = Type::Primitive(pt, tkval);
+        ast_ref.types.insert(name, GraphCell::new(ty));
+      }
     }
     ast
   }
