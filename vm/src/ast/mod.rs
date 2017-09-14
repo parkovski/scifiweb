@@ -13,6 +13,7 @@ pub mod ty;
 pub mod var;
 
 use self::ty::*;
+use self::var::*;
 use self::errors::*;
 
 // =====
@@ -93,8 +94,8 @@ macro_rules! item_ref_impls {
             Ok(r)
           }
           None => Err(ErrorKind::NotDefined(
-            self.name.value().clone(),
-            "forward reference" // T::BASE_TYPE
+            self.name.clone(),
+            "item"
           ).into()),
         }
       }
@@ -110,7 +111,7 @@ macro_rules! item_ref_impls {
       }
 
       fn item_name(&self) -> &'static str {
-        "forward reference"
+        ""
       }
     }
 
@@ -151,7 +152,7 @@ pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
   #[serde(skip)]
   array_names: FxHashMap<ArrayName, Arc<str>>,
-  //globals: FxHashMap<Arc<str>, GraphCell<var::Variable<'a>>>,
+  global_scope: GraphCell<Scope<'a>>,
   strings: SharedStrings,
   /// The path "(internal)" for things with no code location.
   #[serde(skip)]
@@ -163,7 +164,7 @@ impl<'a> Ast<'a> {
     let ast = box GraphCell::new(Ast {
       types: Default::default(),
       array_names: Default::default(),
-      //globals: Default::default(),
+      global_scope: Scope::new(),
       strings: SharedStrings::new(),
       internal_path: Arc::new(Path::new("(internal)").into()),
     });
@@ -215,7 +216,7 @@ impl<'a> Ast<'a> {
       Ok(type_ref) => type_ref,
       Err(ty) => return Err(
         ErrorKind::DuplicateDefinition(
-          ty.source_name().value().clone(),
+          ty.source_name().clone(),
           ty.item_name(),
         ).into()
       ),
@@ -304,92 +305,60 @@ pub enum Redemption {
     cost_amount: u32,
   }
 }
-/// A map contains correlations
-/// between a constant value of any key
-/// property on an entity and one value
-/// property with variable expressions,
-/// and must have an exhaustive branch
-/// (or = expr).
-pub struct Map {
-  pub key_type: Type,
-  pub value_type: Type,
-  pub value_property: VarRef,
-  pub branches: Vec<MapBranch>,
-  pub default_branch: Expression,
-}
-
-pub struct MapBranch {
-  pub key_property: VarRef,
-  pub key_value: Constant,
-  pub value_expr: Expression,
-}
-
-/// Do we create a random assortment
-/// of collectables or a random assortment
-/// of groups that contain the same
-/// collectable?
-pub enum RandomDistribution {
-  Individual,
-  /// The range indicates how many
-  /// groups to make. The number of items
-  /// per group will vary based on the
-  /// weights so no matter the group
-  /// distribution settings, it won't be
-  /// possible to get a bunch of something
-  /// that's set to be super rare.
-  Group(Range),
-}
-
-pub enum RandomList {
-  Weighted(Vec<(f32, Type)>),
-  Unweighted(Vec<Type>),
-}
-
-/// A Random is a collectable generator.
-/// It takes an amount expression
-pub struct Random {
-  pub distribution: RandomDistribution,
-  pub item_type: Type,
-  pub amount: Range,
-  pub items: RandomList,
-}
 */
 
 mod errors {
   // ?????
   #![allow(unused_doc_comment)]
   use std::sync::Arc;
+  use compile::{TokenSpan, TokenValue};
 
   error_chain! {
     errors {
       InvalidOperation(operation: &'static str) {
         description("invalid operation")
-        display("invalid operation: {}", operation)
+        display("internal error: invalid operation {}", operation)
       }
 
-      NotDefined(name: Arc<str>, typ: &'static str) {
+      NotDefined(name: TokenValue<Arc<str>>, typ: &'static str) {
         description("item not defined")
-        display("no definition for {} '{}'", typ, &name)
+        display("{}: no definition for {} '{}'", name.span(), typ, name.value())
       }
 
-      DuplicateDefinition(name: Arc<str>, typ: &'static str) {
+      DuplicateDefinition(name: TokenValue<Arc<str>>, typ: &'static str) {
         description("item already defined")
-        display("{} '{}' already defined", typ, &name)
+        display("{}: {} '{}' already defined", name.span(), typ, name.value())
       }
 
-      TypeResolution(expected: Arc<str>, found: Arc<str>) {
+      TypeResolution(expected: Arc<str>, found: TokenValue<Arc<str>>) {
         description("type resolution mismatch")
-        display("expected type '{}', found '{}' instead", &expected, &found)
+        display(
+          "{}: expected type '{}', found '{}' instead",
+          found.span(),
+          &expected,
+          found.value()
+        )
       }
 
-      ConflictingSuperType(ty: Arc<str>, parent: Arc<str>, conflicting_parent: Arc<str>) {
+      ConflictingSuperType(
+        ty: Arc<str>,
+        parent: Arc<str>,
+        conflicting_parent: TokenValue<Arc<str>>
+      )
+      {
         description("conflicting super type")
         display(
-          "can't set super type of '{}' to '{}' because it already has super type '{}'",
+          "{}: can't set super type of '{}' to '{}' because it already has super type '{}'",
+          conflicting_parent.span(),
           &ty,
-          &conflicting_parent,
+          conflicting_parent.value(),
           &parent
         )
+      }
+
+      ValueOutOfRange(value: String, reason: &'static str, location: TokenSpan) {
+        description("value out of range")
+        display("{}: value '{}' out of range: {}", &location, &value, reason)
       }
     }
   }

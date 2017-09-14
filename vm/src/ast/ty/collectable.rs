@@ -69,7 +69,7 @@ impl<'a> CollectableGroup<'a> {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().value().clone(),
+          p.source_name().clone(),
           "property"
         ).into()
       )
@@ -79,13 +79,21 @@ impl<'a> CollectableGroup<'a> {
   pub fn insert_collectable_ref(&mut self, r: ItemRefMut<'a, Collectable<'a>>) -> Result<()> {
     self.collectables
       .insert_unique(r.source_name().value().clone(), r)
-      .map_err(|(name, _)| ErrorKind::DuplicateDefinition(name, "collectable").into())
+      .map_err(|(_, r)|
+        ErrorKind::DuplicateDefinition(
+          r.source_name().clone(), "collectable"
+        ).into()
+      )
   }
 
   pub fn insert_group_ref(&mut self, r: ItemRefMut<'a, CollectableGroup<'a>>) -> Result<()> {
     self.sub_groups
       .insert_unique(r.source_name().value().clone(), r)
-      .map_err(|(name, _)| ErrorKind::DuplicateDefinition(name, "collectable group").into())
+      .map_err(|(_, r)|
+        ErrorKind::DuplicateDefinition(
+          r.source_name().clone(), "collectable group"
+        ).into()
+      )
   }
 
   pub fn insert_upgrades(&mut self, upgrades: Vec<Upgrade>) {
@@ -212,7 +220,7 @@ impl<'a> Collectable<'a> {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().value().clone(),
+          p.source_name().clone(),
           "property"
         ).into()
       ),

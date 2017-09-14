@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use fxhash::FxHashMap;
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 use compile::{TokenSpan, TokenValue};
 use util::InsertGraphCell;
 use util::graph_cell::*;
@@ -57,6 +58,7 @@ impl<'a> SourceItem for Variable<'a> {
   }
 }
 
+#[derive(Debug)]
 pub struct Scope<'a> {
   vars: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
   parent: Option<GraphRefMut<'a, Scope<'a>>>,
@@ -93,10 +95,10 @@ impl<'a> Scope<'a> {
       ).into());
     }
     let p = parent.awake();
-    for key in self.vars.keys() {
+    for (key, value) in &self.vars {
       if p.has_var(key) {
         return Err(ErrorKind::DuplicateDefinition(
-          key.clone(), "variable"
+          value.awake().source_name().clone(), "variable"
         ).into());
       }
     }
@@ -109,7 +111,7 @@ impl<'a> Scope<'a> {
 
   pub fn insert_var(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     let error: Error = ErrorKind::DuplicateDefinition(
-        var.source_name().value().clone(), "variable"
+        var.source_name().clone(), "variable"
     ).into();
     if let Some(parent) = self.parent {
       if parent.awake().has_var(var.name()) {
@@ -119,6 +121,10 @@ impl<'a> Scope<'a> {
     self.vars
       .insert_graph_cell(var.source_name().value().clone(), var)
       .map_err(move |_| error)
+  }
+
+  fn level(&self) -> u32 {
+    self.parent.map(|p| 1 + p.awake().level()).unwrap_or(0)
   }
 }
 
@@ -133,4 +139,18 @@ impl<'a> Owner<'a, Variable<'a>> for Scope<'a> {
         .unwrap_or(None)
       )
   }
+}
+
+impl<'a> Serialize for Scope<'a> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_struct("Scope", 2)?;
+    state.serialize_field("level", &self.level())?;
+    state.serialize_field("vars", &self.vars)?;
+    state.end()
+  }
+}
+
+pub trait Scoped<'a> {
+  fn scope(&self) -> GraphRef<'a, Scope<'a>>;
+  fn scope_mut(&mut self) -> GraphRefMut<'a, Scope<'a>>;
 }

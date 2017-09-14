@@ -63,38 +63,38 @@ mod parse_errors {
   error_chain! {
     errors {
       Nom(span: TokenSpan) {
-        description("nom")
-        display("nom error at {}", span)
+        description("nom/lexer error")
+        display("{}: lexer error", &span)
       }
 
       UnclosedString(span: Placeholder<TokenSpan>) {
         description("unclosed string")
-        display("unclosed string at {}", span)
+        display("{}: unclosed string", &span)
       }
 
       Unexpected(token: TokenValue<Arc<str>>) {
         description("unexpected token")
-        display("unexpected token {}", &token)
+        display("{}: unexpected token '{}'", token.span(), token.value())
       }
 
       Expected(expected: String, found: TokenValue<Arc<str>>) {
         description("expected token not found")
-        display("expected {}, found {}", &expected, &found)
+        display("{}: expected '{}', found '{}'", found.span(), &expected, found.value())
       }
 
       Syntax(message: String, location: TokenSpan) {
         description("syntax error")
-        display("syntax error: {} at {}", &message, &location)
+        display("{}: syntax error {}", &location, &message)
       }
 
       InvalidOperation(operation: &'static str, location: TokenSpan) {
         description("invalid operation")
-        display("invalid operation {} at {}", operation, &location)
+        display("{}: invalid operation: {}", &location, operation)
       }
 
       IntegerOutOfRange(integer: TokenValue<i64>, reason: &'static str) {
         description("integer out of range")
-        display("integer out of range {}, {}", &integer, reason)
+        display("{}: integer '{}' out of range: {}", integer.span(), integer.value(), reason)
       }
     }
 

@@ -140,7 +140,7 @@ impl BaseCustomType {
     match *self {
       BaseCustomType::Array => {
         return Err(ErrorKind::InvalidOperation(
-          "custom array types are defined inline"
+          "empty custom array type is not valid - use PrimitiveType::Array"
         ).into());
       }
       BaseCustomType::Object => { Ast::insert_type(ast, Object::new(name))?; }
@@ -298,7 +298,7 @@ pub trait SubType<'a, T: SourceItem>: SourceItem {
         return Err(ErrorKind::ConflictingSuperType(
           self.source_name().value().clone(),
           st.awake().source_name().value().clone(),
-          super_type.awake().source_name().value().clone(),
+          super_type.awake().source_name().clone(),
         ).into());
       }
     }

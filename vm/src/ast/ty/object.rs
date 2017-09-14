@@ -34,7 +34,7 @@ impl<'a> Object<'a> {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().value().clone(),
+          p.source_name().clone(),
           "property"
         ).into()
       )
