@@ -77,8 +77,14 @@ lexfn!(op_notequal -> TokenKind<'a>,
 lexfn!(op_less -> TokenKind<'a>,
   do_parse!(tag!("<") >> (TokenKind::Less))
 );
+lexfn!(op_leftarrow -> TokenKind<'a>,
+  do_parse!(tag!("<-") >> (TokenKind::LeftArrow))
+);
 lexfn!(op_greater -> TokenKind<'a>,
   do_parse!(tag!(">") >> (TokenKind::Greater))
+);
+lexfn!(op_rightarrow -> TokenKind<'a>,
+  do_parse!(tag!("<-") >> (TokenKind::RightArrow))
 );
 lexfn!(op_lessequal -> TokenKind<'a>,
   do_parse!(tag!("<=") >> (TokenKind::LessEqual))
@@ -111,7 +117,9 @@ lexfn!(operator -> TokenKind<'a>,
     | op_equal
     | op_notequal
     | op_less
+    | op_leftarrow
     | op_greater
+    | op_rightarrow
     | op_lessequal
     | op_greaterequal
     | op_percentsign

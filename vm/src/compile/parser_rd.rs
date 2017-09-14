@@ -282,7 +282,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     } else if self.token == TokenMatch::Keyword {
       let keyword = extract!(self, Keyword).unwrap();
       let primitive_type = match keyword {
-        Keyword::Switch => PrimitiveType::Switch,
+        Keyword::Option => PrimitiveType::Option,
         Keyword::Text => PrimitiveType::Text,
         Keyword::Localized => {
           self.advance()?;

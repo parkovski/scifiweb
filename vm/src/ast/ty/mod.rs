@@ -27,7 +27,7 @@ pub use self::user::*;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum PrimitiveType {
   Void,
-  Switch,
+  Option,
   Text,
   LocalizedText,
   Integer,
@@ -43,7 +43,7 @@ impl PrimitiveType {
     use self::PrimitiveType::*;
     match *self {
       Void => "void",
-      Switch => "switch",
+      Option => "option",
       Text => "text",
       LocalizedText => "localized text",
       Integer => "integer",
@@ -66,8 +66,8 @@ impl PrimitiveType {
         use self::PrimitiveType::*;
         let next = self.next;
         self.next = match next {
-          Some(Void) => Some(Switch),
-          Some(Switch) => Some(Text),
+          Some(Void) => Some(Option),
+          Some(Option) => Some(Text),
           Some(Text) => Some(LocalizedText),
           Some(LocalizedText) => Some(Integer),
           Some(Integer) => Some(Decimal),

@@ -94,6 +94,8 @@ pub enum TokenKind<'a> {
   GreaterEqual,
   PercentSign,
   Exclamation,
+  LeftArrow,
+  RightArrow,
 }
 
 impl<'a> TokenKind<'a> {
@@ -129,6 +131,8 @@ impl<'a> TokenKind<'a> {
       TK::GreaterEqual => ">=",
       TK::PercentSign => "%",
       TK::Exclamation => "!",
+      TK::LeftArrow => "<-",
+      TK::RightArrow => "->",
     }
   }
 }
@@ -392,7 +396,7 @@ macro_rules! keywords {
 keywords! {
   KEYWORDS, Keyword,
 
-  "switch" => Switch,
+  "option" => Option,
   "text" => Text,
   "integer" => Integer,
   "decimal" => Decimal,
@@ -409,8 +413,8 @@ keywords! {
   "event" => Event,
   "function" => Function,
 
-  "on" => On,
-  "off" => Off,
+  "yes" => Yes,
+  "no" => No,
   "seconds" => Seconds,
   "minutes" => Minutes,
   "hours" => Hours,
@@ -442,7 +446,6 @@ keywords! {
   "set" => Set,
   "find" => Find,
   "notify" => Notify,
-  "option" => Option,
   "random" => Random,
   "if" => If,
   "else" => Else,

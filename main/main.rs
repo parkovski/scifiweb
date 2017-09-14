@@ -40,7 +40,7 @@ Options:
                                   The default is './scifiweb.json'.
   -c <key=value> ...              Override a configuration option.
   -t <target> --target=<target>   Specify the build target.
-                                  Valid targets: all, csharp, sql, initdb.
+                                  Valid targets: all, csharp, sql.
   -z <debug-options> ...          Set a debug option.
 
 Command overview:
@@ -55,7 +55,6 @@ enum Target {
   All,
   CSharp,
   Sql,
-  InitDb,
 }
 
 impl Default for Target {
