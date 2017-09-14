@@ -119,7 +119,7 @@ macro_rules! item_ref_impls {
 }
 
 item_ref_impls!(ItemRef, GraphRef, awake, find);
-item_ref_impls!(ItemRefMut, GraphRefMut, awake_ref, find_mut);
+item_ref_impls!(ItemRefMut, GraphRefMut, awake, find_mut);
 
 impl<'a, T: SourceItem + 'a> ItemRef<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
@@ -231,7 +231,7 @@ impl<'a> Ast<'a> {
     name: ArrayName,
   ) -> GraphRef<'a, Type<'a>>
   {
-    let opt_str_name = this.awake_ref().array_names.get(&name).map(|n| n.clone());
+    let opt_str_name = this.awake().array_names.get(&name).map(|n| n.clone());
     let str_name = if let Some(stored) = opt_str_name {
       stored
     } else {
@@ -239,7 +239,7 @@ impl<'a> Ast<'a> {
       this.awake_mut().array_names.insert(name.clone(), stored.clone());
       stored
     };
-    let opt_array = <Self as Owner<Type>>::find(&this.awake_ref(), &str_name);
+    let opt_array = <Self as Owner<Type>>::find(&this.awake(), &str_name);
     if let Some(array) = opt_array {
       // It's either the primitive type "array" or something with a name
       // only an array can have.
@@ -252,7 +252,7 @@ impl<'a> Ast<'a> {
       );
       array
     } else {
-      let tv = TokenValue::new(str_name, TokenSpan::new(this.awake_ref().internal_path.clone()));
+      let tv = TokenValue::new(str_name, TokenSpan::new(this.awake().internal_path.clone()));
       let ty = name.type_name.map(|n| ItemRef::new(n.clone()));
       let array = Array::new(tv, ty, name.length);
       Self::insert_type(this, array).unwrap().asleep_ref()

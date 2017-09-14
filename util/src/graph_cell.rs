@@ -91,10 +91,6 @@ impl<T: ?Sized> GraphCell<T> {
     }
   }
 
-  pub fn awake_ref<'a>(&self) -> GraphRefAwake<'a, T> where Self: 'a {
-    self.awake()
-  }
-
   pub fn awake_mut<'a>(&self) -> GraphRefAwakeMut<'a, T> where Self: 'a {
     acquire_for_write(&self.borrow_count);
     unsafe {
@@ -194,10 +190,6 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
     }
   }
 
-  pub fn awake_ref(&self) -> GraphRefAwake<'a, T> {
-    self.awake()
-  }
-
   fn map_data<F, U>(&self, map_fn: F) -> U
   where
     F: FnOnce(&'a T) -> U,
@@ -285,7 +277,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
     }
   }
 
-  pub fn awake_ref(&self) -> GraphRefAwake<'a, T> {
+  pub fn awake(&self) -> GraphRefAwake<'a, T> {
     acquire_for_read(self.borrow_count);
     unsafe {
       GraphRefAwake {
@@ -470,7 +462,7 @@ impl<'a, T: ?Sized + 'a> GraphRefAwakeMut<'a, T> {
     }
   }
 
-  pub fn awake_ref(awake_mut: GraphRefAwakeMut<'a, T>) -> GraphRefAwake<'a, T> {
+  pub fn awake(awake_mut: GraphRefAwakeMut<'a, T>) -> GraphRefAwake<'a, T> {
     let (data, borrow_count) = (awake_mut.data as *mut _, awake_mut.borrow_count);
     mem::forget(awake_mut);
     // We know this is ok because if we're passed a valid

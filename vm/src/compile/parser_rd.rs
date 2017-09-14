@@ -329,7 +329,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         _ => return self.e_expected("type name"),
       };
       let tv = self.string_token_value();
-      let gr = <Ast as Owner<Type>>::find(&self.ast.awake_ref(), primitive_type.as_str()).unwrap();
+      let gr = <Ast as Owner<Type>>::find(&self.ast.awake(), primitive_type.as_str()).unwrap();
       self.advance()?;
       Ok(ItemRef::with_item(tv.clone(), gr))
     } else {
@@ -693,7 +693,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   fn string_token_value(&self) -> TokenValue<Arc<str>> {
     let kind = self.token.kind.as_str();
-    let ss = self.ast.awake_ref().shared_string(kind);
+    let ss = self.ast.awake().shared_string(kind);
     let span = self.token.span.clone();
     TokenValue::new(ss, span)
   }

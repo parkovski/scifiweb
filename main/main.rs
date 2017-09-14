@@ -134,7 +134,7 @@ fn main() {
       Ok(ast) => {
         info!("Loaded program.");
         if args.flag_z.save_ast {
-          write_ast(&ast.awake_ref());
+          write_ast(&ast.awake());
         }
       }
       Err(e) => error!("{}", e),
