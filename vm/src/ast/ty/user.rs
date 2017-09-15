@@ -60,8 +60,9 @@ pub struct UserGroup<'a> {
   precedence: Precedence<'a>,
 }
 
-impl_name_traits!((<'a>) UserGroup (<'a>));
-named_display!((<'a>) UserGroup (<'a>));
+impl_named!(type UserGroup, <'a>);
+impl_name_traits!(UserGroup, <'a>);
+named_display!(UserGroup, <'a>);
 
 impl<'a> UserGroup<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -76,10 +77,6 @@ impl<'a> UserGroup<'a> {
 }
 
 impl<'a> SourceItem for UserGroup<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -120,8 +117,9 @@ pub struct User<'a> {
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
 }
 
-impl_name_traits!((<'a>) User (<'a>));
-named_display!((<'a>) User (<'a>));
+impl_named!(type User, <'a>);
+impl_name_traits!(User, <'a>);
+named_display!(User, <'a>);
 
 impl<'a> User<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -130,10 +128,6 @@ impl<'a> User<'a> {
 }
 
 impl<'a> SourceItem for User<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }

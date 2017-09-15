@@ -38,8 +38,9 @@ pub struct Array<'a> {
   max_length: Option<u32>,
 }
 
-impl_name_traits!((<'a>) Array (<'a>));
-named_display!((<'a>) Array (<'a>));
+impl_named!(type Array, <'a>);
+impl_name_traits!(Array, <'a>);
+named_display!(Array, <'a>);
 
 impl<'a> Array<'a> {
   pub fn new(
@@ -53,9 +54,6 @@ impl<'a> Array<'a> {
 }
 
 impl<'a> SourceItem for Array<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
 
   fn span(&self) -> &TokenSpan {
     self.name.span()

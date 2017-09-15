@@ -415,11 +415,14 @@ keywords! {
 
   "yes" => Yes,
   "no" => No,
+  "milliseconds" => Milliseconds,
   "seconds" => Seconds,
   "minutes" => Minutes,
   "hours" => Hours,
   "days" => Days,
   "weeks" => Weeks,
+  "months" => Months,
+  "years" => Years,
 
   "amount" => Amount,
   "cost" => Cost,

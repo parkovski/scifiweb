@@ -8,9 +8,10 @@ use util::graph_cell::*;
 use compile::{TokenSpan, TokenValue};
 
 #[macro_use]
-pub mod macros;
+mod macros;
 pub mod ty;
 pub mod var;
+pub mod expr;
 
 use self::ty::*;
 use self::var::*;
@@ -21,16 +22,15 @@ use self::errors::*;
 pub trait Named: Debug + Display {
   /// The name of the item, which must be unique
   /// among its type in its scope.
-  fn name(&self) -> &str;
+  fn name(&self) -> &TokenValue<Arc<str>>;
 
   /// The item type name, e.g. "collectable" or "variable".
   /// This can be an empty string, in which case
   /// only the name is shown.
-  fn item_name(&self) -> &'static str;
+  fn item_name(&self) -> &'static str { "" }
 }
 
-pub trait SourceItem: Named {
-  fn source_name(&self) -> &TokenValue<Arc<str>>;
+pub trait SourceItem: Debug + Display {
   fn span(&self) -> &TokenSpan;
 
   /// After this, the item knows all of its references
@@ -43,7 +43,7 @@ pub trait SourceItem: Named {
 }
 
 /// For ItemRef resolution.
-pub trait Owner<'a, T: SourceItem + 'a> {
+pub trait Owner<'a, T: Named + 'a> {
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, T>>;
   fn find(&self, name: &str) -> Option<GraphRef<'a, T>> {
     self.find_mut(name).map(|gr| gr.asleep_ref())
@@ -53,20 +53,20 @@ pub trait Owner<'a, T: SourceItem + 'a> {
 // =====
 
 #[derive(Debug, Serialize)]
-pub struct ItemRef<'a, T: SourceItem + 'a> {
+pub struct ItemRef<'a, T: Named + 'a> {
   name: TokenValue<Arc<str>>,
   item: Option<GraphRef<'a, T>>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ItemRefMut<'a, T: SourceItem + 'a> {
+pub struct ItemRefMut<'a, T: Named + 'a> {
   name: TokenValue<Arc<str>>,
   item: Option<GraphRefMut<'a, T>>,
 }
 
 macro_rules! item_ref_impls {
-  ($t:ident, $graph_ref:ident, $awake:ident, $find:ident) => (
-    impl<'a, T: SourceItem + 'a> $t<'a, T> {
+  ($t:ident, $graph_ref:ident, $find:ident) => (
+    impl<'a, T: Named + 'a> $t<'a, T> {
       pub fn new(name: TokenValue<Arc<str>>) -> Self {
         $t {
           name,
@@ -82,7 +82,7 @@ macro_rules! item_ref_impls {
       }
 
       pub fn resolve<O>(&mut self, owner: &O) -> Result<$graph_ref<'a, T>>
-      where O: Owner<'a, T> + Debug
+      where O: Owner<'a, T>
       {
         if let Some(ref item) = self.item {
           return Ok(item.clone());
@@ -99,36 +99,28 @@ macro_rules! item_ref_impls {
           ).into()),
         }
       }
+    }
 
-      pub fn source_name(&self) -> &TokenValue<Arc<str>> {
+    impl<'a, T: Named + 'a> Named for $t<'a, T> {
+      fn name(&self) -> &TokenValue<Arc<str>> {
         &self.name
       }
     }
 
-    impl<'a, T: SourceItem + 'a> Named for $t<'a, T> {
-      fn name(&self) -> &str {
-        &self.name
-      }
-
-      fn item_name(&self) -> &'static str {
-        ""
-      }
-    }
-
-    named_display!((<'a, T: SourceItem + 'a>)$t(<'a, T>));
+    named_display!($t, <'a, T: Named + 'a>);
   );
 }
 
-item_ref_impls!(ItemRef, GraphRef, awake, find);
-item_ref_impls!(ItemRefMut, GraphRefMut, awake, find_mut);
+item_ref_impls!(ItemRef, GraphRef, find);
+item_ref_impls!(ItemRefMut, GraphRefMut, find_mut);
 
-impl<'a, T: SourceItem + 'a> ItemRef<'a, T> {
+impl<'a, T: Named + 'a> ItemRef<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
     self.item
   }
 }
 
-impl<'a, T: SourceItem + 'a> ItemRefMut<'a, T> {
+impl<'a, T: Named + 'a> ItemRefMut<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
     self.item.map(|r| r.asleep_ref())
   }
@@ -172,7 +164,7 @@ impl<'a> Ast<'a> {
       let mut ast_ref = ast.awake_mut();
       let pt_span = TokenSpan::new(ast_ref.internal_path());
       for pt in PrimitiveType::iter() {
-        let name = ast_ref.shared_string(pt.name());
+        let name = ast_ref.shared_string(pt.as_str());
         let tkval = TokenValue::new(name.clone(), pt_span.clone());
         let ty = Type::Primitive(pt, tkval);
         ast_ref.types.insert(name, GraphCell::new(ty));
@@ -208,7 +200,7 @@ impl<'a> Ast<'a> {
   pub fn insert_type<T>(this: GraphRefMut<'a, Ast<'a>>, ty: T) -> Result<GraphRefMut<'a, Type<'a>>>
   where T: CustomType<'a> + CastType<'a> + 'a
   {
-    let name = ty.source_name().value().clone();
+    let name = ty.name().value().clone();
     let self_ref = this.asleep_ref();
     let gr = this
       .awake_mut()
@@ -218,7 +210,7 @@ impl<'a> Ast<'a> {
       Ok(type_ref) => type_ref,
       Err(ty) => return Err(
         ErrorKind::DuplicateDefinition(
-          ty.source_name().clone(),
+          ty.name().clone(),
           ty.item_name(),
         ).into()
       ),

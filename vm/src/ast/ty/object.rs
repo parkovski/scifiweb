@@ -14,8 +14,9 @@ pub struct Object<'a> {
   super_type: Option<ItemRef<'a, Object<'a>>>,
 }
 
-impl_name_traits!((<'a>) Object (<'a>));
-named_display!((<'a>) Object (<'a>));
+impl_named!(type Object, <'a>);
+impl_name_traits!(Object, <'a>);
+named_display!(Object, <'a>);
 
 impl<'a> Object<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -29,12 +30,12 @@ impl<'a> Object<'a> {
 
   fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
     let gr = self.properties
-      .insert_graph_cell(p.source_name().value().clone(), p);
+      .insert_graph_cell(p.name().value().clone(), p);
     match gr {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().clone(),
+          p.name().clone(),
           "property"
         ).into()
       )
@@ -43,10 +44,6 @@ impl<'a> Object<'a> {
 }
 
 impl<'a> SourceItem for Object<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -77,8 +74,8 @@ impl<'a> CustomType<'a> for Object<'a> {
     self.properties.get(name).map(|p| p.asleep())
   }
 
-  fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> {
-    None
+  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+    false
   }
 }
 

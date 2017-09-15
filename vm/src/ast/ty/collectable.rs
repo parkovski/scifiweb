@@ -64,12 +64,12 @@ impl<'a> CollectableGroup<'a> {
   }
 
   pub fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
-    let gr = self.properties.insert_graph_cell(p.source_name().value().clone(), p);
+    let gr = self.properties.insert_graph_cell(p.name().value().clone(), p);
     match gr {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().clone(),
+          p.name().clone(),
           "property"
         ).into()
       )
@@ -78,20 +78,20 @@ impl<'a> CollectableGroup<'a> {
 
   pub fn insert_collectable_ref(&mut self, r: ItemRefMut<'a, Collectable<'a>>) -> Result<()> {
     self.collectables
-      .insert_unique(r.source_name().value().clone(), r)
+      .insert_unique(r.name().value().clone(), r)
       .map_err(|(_, r)|
         ErrorKind::DuplicateDefinition(
-          r.source_name().clone(), "collectable"
+          r.name().clone(), "collectable"
         ).into()
       )
   }
 
   pub fn insert_group_ref(&mut self, r: ItemRefMut<'a, CollectableGroup<'a>>) -> Result<()> {
     self.sub_groups
-      .insert_unique(r.source_name().value().clone(), r)
+      .insert_unique(r.name().value().clone(), r)
       .map_err(|(_, r)|
         ErrorKind::DuplicateDefinition(
-          r.source_name().clone(), "collectable group"
+          r.name().clone(), "collectable group"
         ).into()
       )
   }
@@ -105,30 +105,23 @@ impl<'a> CollectableGroup<'a> {
   }
 }
 
-impl_name_traits!((<'a>) CollectableGroup (<'a>));
-named_display!((<'a>) CollectableGroup (<'a>));
+impl_named!(type CollectableGroup, <'a>);
+impl_name_traits!(CollectableGroup, <'a>);
+named_display!(CollectableGroup, <'a>);
 
 impl<'a> SourceItem for CollectableGroup<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
 
   fn resolve(&mut self) -> Result<()> {
     for g in self.sub_groups.values_mut() {
-      g
-        .resolve(&*self.ast_ref.awake())?
-        .awake_mut()
-        .set_super_type(*self.self_ref)?;
+      let g_ref = g.resolve(&*self.ast_ref.awake())?;
+      g_ref.awake_mut().set_super_type(*self.self_ref)?;
     }
     for c in self.collectables.values_mut() {
-      c
-        .resolve(&*self.ast_ref.awake())?
-        .awake_mut()
-        .set_super_type(*self.self_ref)?;
+      let c_ref = c.resolve(&*self.ast_ref.awake())?;
+      c_ref.awake_mut().set_super_type(*self.self_ref)?;
     }
     Ok(())
   }
@@ -165,8 +158,8 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
     self.properties.get(name).map(|p| p.asleep())
   }
 
-  fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> {
-    None
+  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+    false
   }
 }
 
@@ -215,12 +208,12 @@ impl<'a> Collectable<'a> {
   }
 
   pub fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
-    let gr = self.properties.insert_graph_cell(p.source_name().value().clone(), p);
+    let gr = self.properties.insert_graph_cell(p.name().value().clone(), p);
     match gr {
       Ok(_) => Ok(()),
       Err(p) => Err(
         ErrorKind::DuplicateDefinition(
-          p.source_name().clone(),
+          p.name().clone(),
           "property"
         ).into()
       ),
@@ -236,14 +229,11 @@ impl<'a> Collectable<'a> {
   }
 }
 
-impl_name_traits!((<'a>)Collectable(<'a>));
-named_display!((<'a>)Collectable(<'a>));
+impl_named!(type Collectable, <'a>);
+impl_name_traits!(Collectable, <'a>);
+named_display!(Collectable, <'a>);
 
 impl<'a> SourceItem for Collectable<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -270,9 +260,8 @@ impl<'a> CustomType<'a> for Collectable<'a> {
     TC_PROPERTIES | TC_OWNED | TC_INHERIT
   }
 
-  fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> {
-    //self.parent.map(|p| &p)
-    None
+  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+    false
   }
 
   fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {

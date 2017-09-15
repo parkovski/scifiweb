@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::fmt::{self, Debug, Display};
 use std::mem;
 use std::iter::Iterator;
 use serde::ser::{Serialize, Serializer, SerializeTupleVariant};
@@ -86,17 +86,11 @@ impl PrimitiveType {
   }
 }
 
-impl Named for PrimitiveType {
-  fn name(&self) -> &str {
-    self.as_str()
-  }
-
-  fn item_name(&self) -> &'static str {
-    ""
+impl Display for PrimitiveType {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str(self.as_str())
   }
 }
-
-named_display!(PrimitiveType);
 
 /// "Generic" types that form the base
 /// of user defined instances.
@@ -157,17 +151,11 @@ impl BaseCustomType {
   }
 }
 
-impl Named for BaseCustomType {
-  fn name(&self) -> &str {
-    self.as_str()
-  }
-
-  fn item_name(&self) -> &'static str {
-    ""
+impl Display for BaseCustomType {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str(self.as_str())
   }
 }
-
-named_display!(BaseCustomType);
 
 bitflags! {
   #[derive(Default)]
@@ -209,7 +197,7 @@ pub trait CustomType<'a>
   fn base_type(&self) -> BaseCustomType;
   fn capabilities(&self) -> TypeCapability;
 
-  fn super_type(&self) -> Option<GraphRef<'a, CustomType<'a>>> { None }
+  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool { false }
   fn property(&self, _name: &str) -> Option<GraphRef<'a, Variable<'a>>> { None }
 
   /// For casting
@@ -271,23 +259,13 @@ pub trait CastType<'a>: CustomType<'a> + Sized {
   }
 }
 
-impl<'a, T: CustomType<'a> + SourceItem> Named for T {
-  fn name(&self) -> &str {
-    &self.source_name().value()
-  }
-
-  fn item_name(&self) -> &'static str {
-    self.base_type().as_str()
-  }
-}
-
 impl<'a, T: CustomType<'a> + 'a> From<T> for Type<'a> {
   fn from(custom: T) -> Self {
     Type::Custom(Box::new(custom))
   }
 }
 
-pub trait SubType<'a, T: SourceItem>: SourceItem {
+pub trait SubType<'a, T: CustomType<'a>>: CustomType<'a> {
   fn super_type(&self) -> Option<GraphRef<'a, T>>;
   fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, T>);
   fn set_super_type(&mut self, super_type: GraphRef<'a, T>) -> Result<()> {
@@ -296,9 +274,9 @@ pub trait SubType<'a, T: SourceItem>: SourceItem {
         return Ok(());
       } else {
         return Err(ErrorKind::ConflictingSuperType(
-          self.source_name().value().clone(),
-          st.awake().source_name().value().clone(),
-          super_type.awake().source_name().clone(),
+          self.name().value().clone(),
+          st.awake().name().value().clone(),
+          super_type.awake().name().clone(),
         ).into());
       }
     }
@@ -345,32 +323,25 @@ impl<'a> Type<'a> {
 }
 
 impl<'a> Named for Type<'a> {
-  fn name(&self) -> &str {
+  fn name(&self) -> &TokenValue<Arc<str>> {
     match *self {
-      Type::Primitive(ref ty, _) => ty.name(),
+      Type::Primitive(_, ref name) => name,
       Type::Custom(ref ty) => ty.name(),
     }
   }
 
   fn item_name(&self) -> &'static str {
     match *self {
-      Type::Primitive(ty, _) => ty.item_name(),
+      Type::Primitive(ty, _) => ty.as_str(),
       Type::Custom(ref ty) => ty.item_name(),
     }
   }
 }
 
-impl_name_traits!((<'a>) Type (<'a>), all);
-named_display!((<'a>) Type (<'a>));
+impl_name_traits!(@all Type, <'a>);
+named_display!(Type, <'a>);
 
 impl<'a> SourceItem for Type<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    match *self {
-      Type::Primitive(_, ref name) => name,
-      Type::Custom(ref ty) => ty.source_name(),
-    }
-  }
-
   fn span(&self) -> &TokenSpan {
     match *self {
       Type::Primitive(_, ref name) => name.span(),

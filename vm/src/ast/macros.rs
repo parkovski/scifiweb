@@ -1,71 +1,122 @@
+/// Removes the bounds from a generic name, so other macros can make
+/// impl blocks without repeating them.
+macro_rules! generic_name_short {
+  ($first:ident $($rest:tt)+) => (
+    generic_name_short!(@name ($($rest)+), ($first))
+  );
+  (:: $($rest:tt)+) => (
+    generic_name_short!(@name ($($rest)+), (::))
+  );
+  (@name (< $($rest:tt)+), ($($name:tt)+)) => (
+    generic_name_short!(@append ($($rest)+), ($($name)+), ())
+  );
+  (@name ($t:tt $($rest:tt)*), ($($name:tt)+)) => (
+    generic_name_short!(@name ($($rest)*), ($($name)+ $t))
+  );
+  (@name (), ($($name:tt)+)) => (
+    $($name)+
+  );
+  (@append (>), ($($name:tt)+), ($($bounds:tt)+)) => (
+    $($name)+ < $($bounds)+ >
+  );
+  (@append (: $($rest:tt)+), ($($name:tt)+), ($($bounds:tt)+)) => (
+    generic_name_short!(@skip ($($rest)+), ($($name)+), ($($bounds)+))
+  );
+  (@append ($first:tt $($rest:tt)+), ($($name:tt)+), ($($bounds:tt)*)) => (
+    generic_name_short!(@append ($($rest)+), ($($name)+), ($($bounds)* $first))
+  );
+  (@skip (, $($rest:tt)+), ($($name:tt)+), ($($bounds:tt)+)) => (
+    generic_name_short!(@append ($($rest)+), ($($name)+), ($($bounds)+,))
+  );
+  (@skip (> $($rest:tt)*), ($($name:tt)+), ($($bounds:tt)+)) => (
+    generic_name_short!(@append (> $($rest)*), ($($name)+), ($($bounds)+))
+  );
+  (@skip ($first:tt $($rest:tt)+), ($($name:tt)+), ($($bounds:tt)+)) => (
+    generic_name_short!(@skip ($($rest)+), ($($name)+), ($($bounds)+))
+  );
+}
+
 /// Implement traits for types that are identified
 /// by a unique name so they can be compared and
 /// be stored and looked up by name in a hash set.
 macro_rules! impl_name_traits {
-  (@std $ty:ident, ($($generic_req:tt)*), ($($generic:tt)*)) => (
-    impl $($generic_req)* PartialEq for $ty $($generic)* {
+  ($ty:ident, $($bounds:tt)*) => (
+    impl $($bounds)* PartialEq for generic_name_short!($ty $($bounds)*) {
       fn eq(&self, other: &Self) -> bool {
         self.name() == other.name()
       }
     }
 
-    impl $($generic_req)* PartialOrd for $ty $($generic)* {
+    impl $($bounds)* PartialOrd for generic_name_short!($ty $($bounds)*) {
       fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
         self.name().partial_cmp(other.name())
       }
     }
 
-    impl $($generic_req)* ::std::hash::Hash for $ty $($generic)* {
+    impl $($bounds)* ::std::hash::Hash for generic_name_short!($ty $($bounds)*) {
       fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
         self.name().hash(state)
       }
     }
 
-    impl $($generic_req)* ::std::borrow::Borrow<str> for $ty $($generic)* {
+    impl $($bounds)* ::std::borrow::Borrow<str> for generic_name_short!($ty $($bounds)*) {
       fn borrow(&self) -> &str {
         self.name()
       }
     }
   );
-  (@all $ty:ident, ($($generic_req:tt)*), ($($generic:tt)*)) => (
-    impl_name_traits!(@std $ty, ($($generic_req)*), ($($generic)*));
+  (@all $ty:ident, $($bounds:tt)*) => (
+    impl_name_traits!($ty, $($bounds)*);
 
-    impl $($generic_req)* Eq for $ty $($generic)* {}
+    impl $($bounds)* Eq for generic_name_short!($ty $($bounds)*) {}
 
-    impl $($generic_req)* Ord for $ty $($generic)* {
+    impl $($bounds)* Ord for generic_name_short!($ty $($bounds)*) {
       fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
         self.name().cmp(other.name())
       }
     }
   );
-  ($ty:ident) => (
-    impl_name_traits!(@std $ty, (), ());
-  );
-  (($($gen_req:tt)+)$ty:ident($($gen:tt)+)) => (
-    impl_name_traits!(@std $ty, ($($gen_req)+), ($($gen)+));
-  );
-  ($ty:ident, all) => (
-    impl_name_traits!(@all $ty, (), ());
-  );
-  (($($gen_req:tt)+)$ty:ident($($gen:tt)+), all) => (
-    impl_name_traits!(@all $ty, ($($gen_req)+), ($($gen)+));
-  );
 }
 
 macro_rules! named_display {
-  (($($gen_req:tt)*) $ty:ident ($($gen:tt)*)) => (
-    impl $($gen_req)* ::std::fmt::Display for $ty $($gen)* {
+  ($ty:ident, $($bounds:tt)*) => (
+    impl $($bounds)* ::std::fmt::Display for generic_name_short!($ty $($bounds)*) {
       fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         let item_name = self.item_name();
         if item_name.is_empty() {
-          write!(f, "{}", self.name())
+          write!(f, "{}", self.name().value())
         } else {
-          write!(f, "{} {}", item_name, self.name())
+          write!(f, "{} {}", item_name, self.name().value())
         }
       }
     }
   );
   ($ty:ident) => (
-    named_display!(() $ty ());
+    named_display!($ty,);
   )
+}
+
+macro_rules! impl_named {
+  ($ty:ident, $item_name:expr, $($bounds:tt)*) => (
+    impl $($bounds)* Named for generic_name_short!($ty $($bounds)*) {
+      fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
+        &self.name
+      }
+
+      fn item_name(&self) -> &'static str {
+        $item_name
+      }
+    }
+  );
+  (type $ty:ident, $($bounds:tt)*) => (
+    impl $($bounds)* Named for generic_name_short!($ty $($bounds)*) {
+      fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
+        &self.name
+      }
+
+      fn item_name(&self) -> &'static str {
+        Self::BASE_TYPE.as_str()
+      }
+    }
+  );
 }

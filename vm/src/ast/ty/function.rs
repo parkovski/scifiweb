@@ -11,8 +11,9 @@ pub struct Function<'a> {
   //scope: GraphCell<Scope>,
 }
 
-impl_name_traits!((<'a>) Function (<'a>));
-named_display!((<'a>) Function (<'a>));
+impl_named!(type Function, <'a>);
+impl_name_traits!(Function, <'a>);
+named_display!(Function, <'a>);
 
 impl<'a> Function<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -24,10 +25,6 @@ impl<'a> Function<'a> {
 }
 
 impl<'a> SourceItem for Function<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -61,8 +58,9 @@ pub struct RemoteFunction<'a> {
   params: Vec<GraphCell<Variable<'a>>>,
 }
 
-impl_name_traits!((<'a>) RemoteFunction (<'a>));
-named_display!((<'a>) RemoteFunction (<'a>));
+impl_named!(type RemoteFunction, <'a>);
+impl_name_traits!(RemoteFunction, <'a>);
+named_display!(RemoteFunction, <'a>);
 
 impl<'a> RemoteFunction<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -74,10 +72,6 @@ impl<'a> RemoteFunction<'a> {
 }
 
 impl<'a> SourceItem for RemoteFunction<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }

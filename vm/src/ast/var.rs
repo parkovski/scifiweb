@@ -28,23 +28,10 @@ impl<'a> Variable<'a> {
   }
 }
 
-impl<'a> Named for Variable<'a> {
-  fn name(&self) -> &str {
-    &self.name
-  }
-
-  fn item_name(&self) -> &'static str {
-    "property"
-  }
-}
-
-named_display!((<'a>)Variable(<'a>));
+impl_named!(Variable, "variable", <'a>);
+named_display!(Variable, <'a>);
 
 impl<'a> SourceItem for Variable<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -98,7 +85,7 @@ impl<'a> Scope<'a> {
     for (key, value) in &self.vars {
       if p.has_var(key) {
         return Err(ErrorKind::DuplicateDefinition(
-          value.awake().source_name().clone(), "variable"
+          value.awake().name().clone(), "variable"
         ).into());
       }
     }
@@ -111,15 +98,15 @@ impl<'a> Scope<'a> {
 
   pub fn insert_var(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     let error: Error = ErrorKind::DuplicateDefinition(
-        var.source_name().clone(), "variable"
+        var.name().clone(), "variable"
     ).into();
     if let Some(parent) = self.parent {
-      if parent.awake().has_var(var.name()) {
+      if parent.awake().has_var(&var.name()) {
         return Err(error);
       }
     }
     self.vars
-      .insert_graph_cell(var.source_name().value().clone(), var)
+      .insert_graph_cell(var.name().value().clone(), var)
       .map_err(move |_| error)
   }
 

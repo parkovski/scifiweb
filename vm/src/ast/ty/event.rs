@@ -11,8 +11,9 @@ pub struct Event<'a> {
   //scope: GraphCell<Scope>,
 }
 
-impl_name_traits!((<'a>) Event (<'a>));
-named_display!((<'a>) Event (<'a>));
+impl_named!(type Event, <'a>);
+impl_name_traits!(Event, <'a>);
+named_display!(Event, <'a>);
 
 impl<'a> Event<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -24,10 +25,6 @@ impl<'a> Event<'a> {
 }
 
 impl<'a> SourceItem for Event<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -61,8 +58,9 @@ pub struct RemoteEvent<'a> {
   params: Vec<GraphCell<Variable<'a>>>,
 }
 
-impl_name_traits!((<'a>) RemoteEvent (<'a>));
-named_display!((<'a>) RemoteEvent (<'a>));
+impl_named!(type RemoteEvent, <'a>);
+impl_name_traits!(RemoteEvent, <'a>);
+named_display!(RemoteEvent, <'a>);
 
 impl<'a> RemoteEvent<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -74,10 +72,6 @@ impl<'a> RemoteEvent<'a> {
 }
 
 impl<'a> SourceItem for RemoteEvent<'a> {
-  fn source_name(&self) -> &TokenValue<Arc<str>> {
-    &self.name
-  }
-
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }

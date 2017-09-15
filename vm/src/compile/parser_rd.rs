@@ -320,10 +320,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
             ty = Some(self.parse_type()?);
           }
           // TODO: Return the custom type for the array.
-          let type_name = ty.map(|t| t.source_name().clone());
+          let type_name = ty.map(|t| t.name().clone());
           let array = Ast::get_array(self.ast, ArrayName::new(length, type_name));
           return Ok(
-            ItemRef::with_item(array.awake().source_name().clone(), array)
+            ItemRef::with_item(array.awake().name().clone(), array)
           );
         }
         _ => return self.e_expected("type name"),
@@ -555,7 +555,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     unimplemented!()
   }
 
-  // <>Variables
+  // <>Variable
 
   /// property <name> <type>
   fn parse_property(&mut self) -> Result<Variable<'ast>> {
@@ -566,6 +566,20 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     Ok(Variable::new(name, ty))
   }
 
+  // <>Expression
+/*
+  fn parse_expression(&mut self) -> Result<Box<Expression<'ast>>> {
+    unimplemented!()
+  }
+
+  /// primary = ident | amount | literal
+  fn parse_expr_primary(&mut self) -> Result<ExprPrimary<'ast>> {
+    if self.token == TokenMatch::Identifier {
+      let id = extract!(self, Identifier).unwrap();
+    }
+    unimplemented!()
+  }
+*/
   // <>General
 
   fn parse_end(&mut self) -> Result<()> {
