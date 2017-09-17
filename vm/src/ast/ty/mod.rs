@@ -2,7 +2,7 @@ use std::fmt::{self, Debug, Display};
 use std::mem;
 use std::iter::Iterator;
 use serde::ser::{Serialize, Serializer, SerializeTupleVariant};
-use serde_json;
+use erased_serde::Serialize as ErasedSerialize;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
 use super::var::Variable;
@@ -89,6 +89,77 @@ impl PrimitiveType {
 impl Display for PrimitiveType {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     f.write_str(self.as_str())
+  }
+}
+
+#[derive(Debug)]
+pub struct PrimitiveTypeSet<'a> {
+  void: GraphRef<'a, Type<'a>>,
+  option: GraphRef<'a, Type<'a>>,
+  text: GraphRef<'a, Type<'a>>,
+  localized_text: GraphRef<'a, Type<'a>>,
+  integer: GraphRef<'a, Type<'a>>,
+  decimal: GraphRef<'a, Type<'a>>,
+  date_time: GraphRef<'a, Type<'a>>,
+  time_span: GraphRef<'a, Type<'a>>,
+  object: GraphRef<'a, Type<'a>>,
+  array: GraphRef<'a, Type<'a>>,
+}
+
+impl<'a> PrimitiveTypeSet<'a> {
+  pub fn new(map: &FxHashMap<Arc<str>, GraphCell<Type<'a>>>) -> Self {
+    PrimitiveTypeSet {
+      void: map.get(PrimitiveType::Void.as_str()).unwrap().asleep(),
+      option: map.get(PrimitiveType::Option.as_str()).unwrap().asleep(),
+      text: map.get(PrimitiveType::Text.as_str()).unwrap().asleep(),
+      localized_text: map.get(PrimitiveType::LocalizedText.as_str()).unwrap().asleep(),
+      integer: map.get(PrimitiveType::Integer.as_str()).unwrap().asleep(),
+      decimal: map.get(PrimitiveType::Decimal.as_str()).unwrap().asleep(),
+      date_time: map.get(PrimitiveType::DateTime.as_str()).unwrap().asleep(),
+      time_span: map.get(PrimitiveType::TimeSpan.as_str()).unwrap().asleep(),
+      object: map.get(PrimitiveType::Object.as_str()).unwrap().asleep(),
+      array: map.get(PrimitiveType::Array.as_str()).unwrap().asleep(),
+    }
+  }
+
+  pub fn void(&self) -> GraphRef<'a, Type<'a>> {
+    self.void
+  }
+
+  pub fn option(&self) -> GraphRef<'a, Type<'a>> {
+    self.option
+  }
+
+  pub fn text(&self) -> GraphRef<'a, Type<'a>> {
+    self.text
+  }
+
+  pub fn localized_text(&self) -> GraphRef<'a, Type<'a>> {
+    self.localized_text
+  }
+
+  pub fn integer(&self) -> GraphRef<'a, Type<'a>> {
+    self.integer
+  }
+
+  pub fn decimal(&self) -> GraphRef<'a, Type<'a>> {
+    self.decimal
+  }
+
+  pub fn date_time(&self) -> GraphRef<'a, Type<'a>> {
+    self.date_time
+  }
+
+  pub fn time_span(&self) -> GraphRef<'a, Type<'a>> {
+    self.time_span
+  }
+
+  pub fn object(&self) -> GraphRef<'a, Type<'a>> {
+    self.object
+  }
+
+  pub fn array(&self) -> GraphRef<'a, Type<'a>> {
+    self.array
   }
 }
 
@@ -184,9 +255,10 @@ bitflags! {
 pub trait CustomType<'a>
   : Debug
   + Display
-  + ToJson
+  + CustomTypeAsSerialize
   + Named
   + SourceItem
+  + 'a
 {
   fn init_cyclic(
     &mut self,
@@ -199,29 +271,21 @@ pub trait CustomType<'a>
 
   fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool { false }
   fn property(&self, _name: &str) -> Option<GraphRef<'a, Variable<'a>>> { None }
-
-  /// For casting
-  fn _self_ptr(&self) -> *const usize { self as *const _ as *const usize }
 }
 
-pub trait ToJson {
-  fn to_json(&self) -> serde_json::Value;
+pub trait CustomTypeAsSerialize {
+  fn as_serialize(&self) -> &ErasedSerialize;
 }
 
-impl<'a, T> ToJson for T
-where
-  T: CustomType<'a> + Sized + Serialize
-{
-  fn to_json(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+impl<T> CustomTypeAsSerialize for T where T: ErasedSerialize {
+  fn as_serialize(&self) -> &ErasedSerialize {
+    self
   }
 }
 
-impl<'a> Serialize for CustomType<'a> + 'a {
-  fn serialize<S: Serializer>(&self, serializer: S)
-    -> ::std::result::Result<S::Ok, S::Error>
-  {
-    self.to_json().serialize(serializer)
+impl<'a> Serialize for CustomType<'a> {
+  fn serialize<S: Serializer>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error> {
+    self.as_serialize().serialize(serializer)
   }
 }
 
@@ -237,7 +301,7 @@ pub trait CastType<'a>: CustomType<'a> + Sized {
       return None;
     }
     debug_assert!(mem::size_of::<Self>() == mem::size_of_val(ty));
-    let base_type_ptr = ty._self_ptr();
+    let base_type_ptr = ty as *const CustomType<'a> as *const usize;
     unsafe { mem::transmute(base_type_ptr) }
   }
 
@@ -376,7 +440,7 @@ impl<'a> Serialize for Type<'a> {
       }
       Type::Custom(ref t) => {
         let mut tv = serializer.serialize_tuple_variant("Type", 1, "Custom", 1)?;
-        tv.serialize_field(&**t)?;
+        tv.serialize_field(t.as_serialize())?;
         tv.end()
       }
     }

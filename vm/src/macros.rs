@@ -98,7 +98,7 @@ macro_rules! named_display {
 
 macro_rules! impl_named {
   ($ty:ident, $item_name:expr, $($bounds:tt)*) => (
-    impl $($bounds)* Named for generic_name_short!($ty $($bounds)*) {
+    impl $($bounds)* ::ast::Named for generic_name_short!($ty $($bounds)*) {
       fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
         &self.name
       }
@@ -109,7 +109,7 @@ macro_rules! impl_named {
     }
   );
   (type $ty:ident, $($bounds:tt)*) => (
-    impl $($bounds)* Named for generic_name_short!($ty $($bounds)*) {
+    impl $($bounds)* ::ast::Named for generic_name_short!($ty $($bounds)*) {
       fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
         &self.name
       }

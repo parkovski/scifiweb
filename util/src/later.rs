@@ -21,6 +21,10 @@ impl<T> Later<T> {
   pub fn set(&mut self, value: T) {
     self.value = Some(value);
   }
+
+  pub fn is_set(&self) -> bool {
+    self.value.is_some()
+  }
 }
 
 impl<T> Default for Later<T> {

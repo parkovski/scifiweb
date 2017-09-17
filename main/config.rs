@@ -116,13 +116,42 @@ impl Default for ServerConfig {
   }
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+pub enum DefaultTimeZone {
+  UTC,
+  Local,
+  Offset(i8),
+}
+
+// Note: Local is never equal to anything because
+// it depends on where the program is run.
+impl PartialEq for DefaultTimeZone {
+  fn eq(&self, other: &Self) -> bool {
+    use self::DefaultTimeZone::*;
+    match (*self, *other) {
+      (UTC, UTC) => true,
+      (UTC, Offset(0)) => true,
+      (Offset(0), UTC) => true,
+      (Offset(a), Offset(b)) if a == b => true,
+      _ => false,
+    }
+  }
+}
+
+impl Default for DefaultTimeZone {
+  fn default() -> Self {
+    DefaultTimeZone::UTC
+  }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(default)]
+#[serde(default, rename_all="camelCase")]
 pub struct Config {
   pub program: String,
   pub server: ServerConfig,
   pub log: LogOpts,
   pub out: OutDirs,
+  pub default_time_zone: DefaultTimeZone,
 }
 
 impl Config {
@@ -150,6 +179,7 @@ impl Default for Config {
       server: Default::default(),
       log: Default::default(),
       out: Default::default(),
+      default_time_zone: Default::default(),
     }
   }
 }

@@ -4,6 +4,7 @@ use serde::ser::{Serialize, Serializer, SerializeStruct};
 use compile::{TokenSpan, TokenValue};
 use util::InsertGraphCell;
 use util::graph_cell::*;
+use ast::expr::BoxExpression;
 use super::*;
 use super::errors::*;
 use super::ty::*;
@@ -12,6 +13,7 @@ use super::ty::*;
 pub struct Variable<'a> {
   name: TokenValue<Arc<str>>,
   ty: ItemRef<'a, Type<'a>>,
+  initial: Option<BoxExpression<'a>>,
 }
 
 impl<'a> Variable<'a> {
@@ -20,11 +22,16 @@ impl<'a> Variable<'a> {
     ty: ItemRef<'a, Type<'a>>,
   ) -> Self
   {
-    Variable { name, ty }
+    Variable { name, ty, initial: None }
   }
 
-  pub fn ty(&self) -> Option<GraphRef<Type<'a>>> {
-    self.ty.item()
+  /// Only valid after resolve phase has succeeded.
+  pub fn ty(&self) -> GraphRef<'a, Type<'a>> {
+    self.ty.item().unwrap()
+  }
+
+  pub fn set_initial(&mut self, initial: BoxExpression<'a>) {
+    self.initial = Some(initial);
   }
 }
 

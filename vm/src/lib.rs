@@ -16,10 +16,13 @@ extern crate error_chain;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
+extern crate erased_serde;
 #[macro_use]
 extern crate bitflags;
 extern crate scifi_util as util;
+
+#[macro_use]
+mod macros;
 
 pub mod ast;
 pub mod compile;

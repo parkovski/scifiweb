@@ -83,7 +83,7 @@ fn init(dir: &str) {
   let c = Config::default();
   init_logger(&c);
   let path = Path::new(dir).join("scifiweb.json");
-  debug!("{:?}", path);
+  debug!("writing default config to {:?}", path);
   Config::write(&path, &c).unwrap_or_else(|e| {
     error!("{}", e);
   });

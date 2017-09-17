@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::Read;
 use std::env;
-use std::fmt::{Debug, Display};
 use std::convert::TryInto;
 use nom::IResult;
 use fxhash::FxHashSet;
@@ -12,6 +11,7 @@ use util::graph_cell::*;
 use ast::*;
 use ast::ty::*;
 use ast::var::*;
+use ast::expr::*;
 use super::lexer;
 use super::parse_errors::*;
 use super::token::*;
@@ -77,6 +77,7 @@ pub struct Parser<'p, 'ast: 'p> {
   included_paths: &'p mut FxHashSet<Arc<PathBuf>>,
   inp: &'p [u8],
   ast: GraphRefMut<'ast, Ast<'ast>>,
+  scope: GraphRefMut<'ast, Scope<'ast>>,
 }
 
 impl<'p, 'ast: 'p> Parser<'p, 'ast> {
@@ -90,12 +91,14 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   {
     let token_span = TokenSpan::new(filename.clone());
     let token = Token::new(TokenKind::Invalid('\0'), token_span);
+    let scope = ast.awake().global_scope();
     Parser {
       filename,
       token,
       included_paths,
       inp,
       ast,
+      scope,
     }
   }
 
@@ -245,7 +248,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       }
       Keyword::Remote => {
         self.advance()?;
-        let kwd = self.take(TokenMatch::Keyword)?;
         if self.opt_consume(Keyword::Event)? {
           BaseCustomType::RemoteEvent
         } else if self.opt_consume(Keyword::Function)? {
@@ -304,8 +306,9 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
           if next == Keyword::X {
             // TODO: Constant expression
             self.advance()?;
-            let len_i64 = self.take(TokenMatch::Integer)?;
-            let tv = self.token_value(extract!(self, Integer in len_i64)?);
+            self.expect(TokenMatch::Integer)?;
+            let tv = self.int_token_value().unwrap();
+            self.advance()?;
             let len_u32: u32 = (*tv.value()).try_into()
               .or_else(|_| -> Result<u32> {
                 Err(ErrorKind::IntegerOutOfRange(
@@ -563,23 +566,100 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     let name = self.string_token_value();
     self.advance()?;
     let ty = self.parse_type()?;
-    Ok(Variable::new(name, ty))
+    let mut var = Variable::new(name, ty);
+    if self.token == TokenKind::Equal {
+      self.advance()?;
+      var.set_initial(self.parse_expression()?);
+    }
+    Ok(var)
   }
 
   // <>Expression
-/*
-  fn parse_expression(&mut self) -> Result<Box<Expression<'ast>>> {
-    unimplemented!()
+
+  fn parse_expression(&mut self) -> Result<BoxExpression<'ast>> {
+    self.parse_expr_primary()
   }
 
   /// primary = ident | amount | literal
-  fn parse_expr_primary(&mut self) -> Result<ExprPrimary<'ast>> {
+  fn parse_expr_primary(&mut self) -> Result<BoxExpression<'ast>> {
     if self.token == TokenMatch::Identifier {
-      let id = extract!(self, Identifier).unwrap();
+      let tv = self.string_token_value();
+      self.advance()?;
+      Ok(box ExprVar::new(tv, self.scope.asleep_ref()))
+    } else if self.token == Keyword::Amount {
+      let tv = self.string_token_value();
+      self.advance()?;
+      Ok(box ExprVar::new(tv, self.scope.asleep_ref()))
+    } else if self.token == TokenMatch::Decimal || self.token == TokenMatch::Percentage {
+      let tv = self.float_token_value().unwrap();
+      self.advance()?;
+      Ok(box ExprLiteral::new(
+        Literal::Decimal(tv),
+        self.ast.awake().primitive().decimal(),
+      ))
+    } else if self.token == TokenMatch::Integer {
+      let tv = self.int_token_value().unwrap();
+      self.advance()?;
+      Ok(match self.parse_time_span(&tv) {
+        Some(ts) => box ExprLiteral::new(
+          Literal::TimeSpan(ts),
+          self.ast.awake().primitive().time_span()
+        ),
+        None => box ExprLiteral::new(
+          Literal::Integer(tv),
+          self.ast.awake().primitive().integer()
+        ),
+      })
+    } else if self.token == TokenMatch::String {
+      let tv = self.string_token_value();
+      self.advance()?;
+      Ok(box ExprLiteral::new(
+        Literal::Text(tv),
+        self.ast.awake().primitive().text()
+      ))
+    } else if self.token == Keyword::Localized {
+      let loc_span = self.token.span.clone();
+      self.advance()?;
+      let tok = self.take(TokenMatch::String)?;
+      let s = extract!(self, String in tok).unwrap();
+      let s = self.ast.awake().shared_string(s);
+      let tv = TokenValue::new(s, loc_span.from_to(&tok.span));
+      Ok(box ExprLiteral::new(
+        Literal::LocalizedText(tv),
+        self.ast.awake().primitive().localized_text()
+      ))
+    } else if self.token == Keyword::No {
+      let tv = TokenValue::new(false, self.token.span.clone());
+      self.advance()?;
+      Ok(box ExprLiteral::new(
+        Literal::Option(tv),
+        self.ast.awake().primitive().option()
+      ))
+    } else if self.token == Keyword::Yes {
+      let tv = TokenValue::new(true, self.token.span.clone());
+      self.advance()?;
+      Ok(box ExprLiteral::new(
+        Literal::Option(tv),
+        self.ast.awake().primitive().option()
+      ))
+    } else {
+      self.e_unexpected()
     }
-    unimplemented!()
+  }
+
+  fn parse_time_span(&mut self, _: &TokenValue<i64>) -> Option<Vec<TimeSpanPart>> {
+    None
+  }
+
+/*
+  // TODO:
+  /// localized <constant expression>
+  /// converts all string literals in the expression to localized strings.
+  fn parse_localized(&mut self) -> Option<BoxExpression<'ast>> {
+
   }
 */
+
   // <>General
 
   fn parse_end(&mut self) -> Result<()> {
@@ -712,10 +792,20 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     TokenValue::new(ss, span)
   }
 
-  fn token_value<I>(&self, value: I) -> TokenValue<I>
-  where I: Debug + Display + Clone + PartialEq
-  {
-    TokenValue::new(value, self.token.span.clone())
+  fn int_token_value(&self) -> Option<TokenValue<i64>> {
+    match self.token.kind {
+      TokenKind::Integer(i) => Some(TokenValue::new(i, self.token.span.clone())),
+      _ => None,
+    }
+  }
+
+  fn float_token_value(&self) -> Option<TokenValue<f64>> {
+    match self.token.kind {
+      TokenKind::Decimal(d) => Some(TokenValue::new(d, self.token.span.clone())),
+      TokenKind::Percentage(p) => Some(TokenValue::new(p / 100.0, self.token.span.clone())),
+      TokenKind::Integer(i) => Some(TokenValue::new(i as f64, self.token.span.clone())),
+      _ => None,
+    }
   }
 
   fn lexer_iresult(&self) -> Result<(Token<'p>, &'p [u8])> {

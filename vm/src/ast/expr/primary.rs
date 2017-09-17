@@ -6,8 +6,9 @@ use compile::{TokenSpan, TokenValue};
 //use ast::var::{Scope, Variable};
 //use ast::ty::{PrimitiveType, Type};
 use ast::*;
+use super::Expression;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[repr(u16)]
 pub enum TimeSpanUnit {
   Milliseconds,
@@ -60,7 +61,7 @@ impl Display for TimeSpanUnit {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TimeSpanPart {
   amount: i16,
   unit: TimeSpanUnit,
@@ -104,6 +105,7 @@ impl TimeSpanPart {
   }
 }
 
+#[derive(Debug, Serialize)]
 pub struct ExprVar<'a> {
   name: TokenValue<Arc<str>>,
   scope: GraphRef<'a, Scope<'a>>,
@@ -120,6 +122,37 @@ impl<'a> ExprVar<'a> {
   }
 }
 
+impl<'a> Display for ExprVar<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    Display::fmt(&self.var.awake(), f)
+  }
+}
+
+impl<'a> SourceItem for ExprVar<'a> {
+  fn span(&self) -> &TokenSpan {
+    self.name.span()
+  }
+
+  fn resolve(&mut self) -> Result<()> {
+    Ok(())
+  }
+
+  fn typecheck(&mut self) -> Result<()> {
+    Ok(())
+  }
+}
+
+impl<'a> Expression<'a> for ExprVar<'a> {
+  fn ty(&self) -> GraphRef<'a, Type<'a>> {
+    self.var.awake().ty()
+  }
+
+  fn is_constant(&self) -> bool {
+    false
+  }
+}
+
+#[derive(Debug, Serialize)]
 pub enum Literal {
   Option(TokenValue<bool>),
   Text(TokenValue<Arc<str>>),
@@ -145,6 +178,21 @@ impl Literal {
   }
 }
 
+impl Display for Literal {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match *self {
+      Literal::Option(ref o) => f.write_str(if *o.value() { "yes" } else { "no" }),
+      Literal::Text(ref t) => f.write_str(&t),
+      Literal::LocalizedText(ref t) => f.write_str(&t),
+      Literal::Integer(ref i) => write!(f, "{}", i),
+      Literal::Decimal(ref d) => write!(f, "{}", d),
+      // FIXME!
+      Literal::TimeSpan(ref ts) => f.write_str("timespan"),
+    }
+  }
+}
+
+#[derive(Debug, Serialize)]
 pub struct ExprLiteral<'a> {
   literal: Literal,
   ty: GraphRef<'a, Type<'a>>,
@@ -153,5 +201,43 @@ pub struct ExprLiteral<'a> {
 impl<'a> ExprLiteral<'a> {
   pub fn new(literal: Literal, ty: GraphRef<'a, Type<'a>>) -> Self {
     ExprLiteral { literal, ty }
+  }
+}
+
+impl<'a> Display for ExprLiteral<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    Display::fmt(&self.literal, f)
+  }
+}
+
+impl<'a> SourceItem for ExprLiteral<'a> {
+  fn span(&self) -> &TokenSpan {
+    match self.literal {
+      Literal::Option(ref o) => o.span(),
+      Literal::Text(ref t) => t.span(),
+      Literal::LocalizedText(ref t) => t.span(),
+      Literal::Integer(ref i) => i.span(),
+      Literal::Decimal(ref d) => d.span(),
+      // FIXME!
+      Literal::TimeSpan(ref ts) => ts[0].span(),
+    }
+  }
+
+  fn resolve(&mut self) -> Result<()> {
+    Ok(())
+  }
+
+  fn typecheck(&mut self) -> Result<()> {
+    Ok(())
+  }
+}
+
+impl<'a> Expression<'a> for ExprLiteral<'a> {
+  fn ty(&self) -> GraphRef<'a, Type<'a>> {
+    self.ty
+  }
+
+  fn is_constant(&self) -> bool {
+    true
   }
 }

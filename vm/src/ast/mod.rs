@@ -5,10 +5,9 @@ use std::path::{Path, PathBuf};
 use fxhash::FxHashMap;
 use util::{SharedStrings, InsertGraphCell};
 use util::graph_cell::*;
+use util::later::Later;
 use compile::{TokenSpan, TokenValue};
 
-#[macro_use]
-mod macros;
 pub mod ty;
 pub mod var;
 pub mod expr;
@@ -143,6 +142,8 @@ impl<'a, T: Named + 'a> ItemRefMut<'a, T> {
 pub struct Ast<'a> {
   types: FxHashMap<Arc<str>, GraphCell<Type<'a>>>,
   #[serde(skip)]
+  primitive_types: Later<PrimitiveTypeSet<'a>>,
+  #[serde(skip)]
   array_names: FxHashMap<ArrayName, Arc<str>>,
   global_scope: GraphCell<Scope<'a>>,
   strings: SharedStrings,
@@ -155,6 +156,7 @@ impl<'a> Ast<'a> {
   pub fn new() -> Box<GraphCell<Self>> {
     let ast = box GraphCell::new(Ast {
       types: Default::default(),
+      primitive_types: Later::new(),
       array_names: Default::default(),
       global_scope: Scope::new(),
       strings: SharedStrings::new(),
@@ -169,6 +171,8 @@ impl<'a> Ast<'a> {
         let ty = Type::Primitive(pt, tkval);
         ast_ref.types.insert(name, GraphCell::new(ty));
       }
+      let primitive_types = PrimitiveTypeSet::new(&ast_ref.types);
+      Later::set(&mut ast_ref.primitive_types, primitive_types);
     }
     ast
   }
@@ -195,6 +199,10 @@ impl<'a> Ast<'a> {
     self.resolution_step(SourceItem::resolve)?;
     trace!("Typecheck");
     self.resolution_step(SourceItem::typecheck)
+  }
+
+  pub fn primitive(&self) -> &PrimitiveTypeSet<'a> {
+    &self.primitive_types
   }
 
   pub fn insert_type<T>(this: GraphRefMut<'a, Ast<'a>>, ty: T) -> Result<GraphRefMut<'a, Type<'a>>>
@@ -252,6 +260,10 @@ impl<'a> Ast<'a> {
       let array = Array::new(tv, ty, name.length);
       Self::insert_type(this, array).unwrap().asleep_ref()
     }
+  }
+
+  pub fn global_scope(&self) -> GraphRefMut<'a, Scope<'a>> {
+    self.global_scope.asleep_mut()
   }
 }
 
