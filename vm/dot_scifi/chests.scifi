@@ -1,27 +1,55 @@
-Chest collectable group:
-  property canOpen switch = off;
-  has collectable
-  has collectable [
-    SmallChest: has redemptions; end;
-    LargeChest: has redemptions; end;
+collectable group Chest:
+  property canOpen option = no;
+  property timeToOpen timespan;
+  property rewards distribution of Card;
+  has collectable [SmallChest, LargeChest];
+end;
+
+collectable SmallChest:
+  default .timeToOpen = 3 hours;
+  default .rewards = SmallChestRewards;
+  has redemptions:
+    x 1 for Coin x 100;
+  end;
+end;
+
+collectable LargeChest:
+  default .timeToOpen = 8 hours;
+  default .rewards = LargeChestRewards;
+  has redemptions:
+    x 1 for Coin x 500;
+  end;
+end;
+
+Chest has event BeginOpen(chest) <- chest.owner:
+  # Only allow one chest to open at a time.
+  assert !find event Chest.BeginOpen for chest.owner;
+  timer chest.timeToOpen;
+  chest.canOpen = yes;
+end;
+
+Chest has event Open(chest) <- chest.owner:
+  option:
+    assert chest.canOpen;
+  or:
+    cost Coin x 1000;
+  end;
+  award +SmallChestRewards;
+  award -chest;
+end;
+
+distribution of Card SmallChestRewards:
+  amount range(10, 15);
+  group range(2, 4) of [
+    CommonCard weighted 75%,
+    RareCard
   ];
 end;
 
-BeginOpenChest event:
-  params(chest collectable group Chest);
-  authorize user chest.owner;
-  assert !find event BeginOpenChest for user chest.owner;
-  timer 3 hours;
-  set chest.canOpen = on;
-end;
-
-OpenChest event:
-  params(chest collectable group Chest);
-  authorize user chest.owner;
-  option(
-    assert chest.canOpen = on;
-  ) or (
-    cost Coin x 1000;
-  );
-  award -chest;
+distribution of Card LargeChestRewards:
+  amount range(20, 25);
+  group range (3, 5) of [
+    CommonCard weighted 70%,
+    RareCard
+  ]
 end;
