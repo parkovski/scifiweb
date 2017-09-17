@@ -6,8 +6,10 @@ use ast::SourceItem;
 use ast::ty::Type;
 
 mod primary;
+mod oper;
 
 pub use self::primary::*;
+pub use self::oper::*;
 
 pub trait Expression<'a>
   : Debug
@@ -18,6 +20,7 @@ pub trait Expression<'a>
 {
   fn ty(&self) -> GraphRef<'a, Type<'a>>;
   fn is_constant(&self) -> bool;
+  fn precedence(&self) -> u8 { 0 }
 }
 
 pub type BoxExpression<'a> = Box<Expression<'a> + 'a>;

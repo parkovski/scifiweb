@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::Read;
 use std::env;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
+use std::result::Result as StdResult;
 use nom::IResult;
 use fxhash::FxHashSet;
 use util::split_vec::SplitVec;
@@ -68,6 +69,38 @@ where
     } else {
       p.e_expected(self.as_ref())
     }
+  }
+}
+
+impl<'a> TryFrom<TokenKind<'a>> for UnaryOperator {
+  type Error = ();
+  fn try_from(value: TokenKind<'a>) -> StdResult<Self, ()> {
+    match value {
+      TokenKind::Minus => Ok(UnaryOperator::Neg),
+      TokenKind::Exclamation => Ok(UnaryOperator::Not),
+      _ => Err(()),
+    }
+  }
+}
+
+impl<'a> TryFrom<TokenKind<'a>> for BinaryOperator {
+  type Error = ();
+  fn try_from(value: TokenKind<'a>) -> StdResult<Self, ()> {
+    Ok(match value {
+      TokenKind::Multiply => BinaryOperator::Mul,
+      TokenKind::Divide => BinaryOperator::Div,
+      TokenKind::PercentSign => BinaryOperator::Mod,
+      TokenKind::Caret => BinaryOperator::Pow,
+      TokenKind::Plus => BinaryOperator::Add,
+      TokenKind::Minus => BinaryOperator::Sub,
+      TokenKind::Equal => BinaryOperator::Eq,
+      TokenKind::NotEqual => BinaryOperator::Ne,
+      TokenKind::Less => BinaryOperator::Lt,
+      TokenKind::LessEqual => BinaryOperator::Le,
+      TokenKind::Greater => BinaryOperator::Gt,
+      TokenKind::GreaterEqual => BinaryOperator::Ge,
+      _ => return Err(()),
+    })
   }
 }
 
@@ -660,6 +693,27 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   }
 */
 
+  fn operators_for_precedence(&self, prec: usize) -> &'static [TokenKind<'static>] {
+    static LISTS: &[&'static [TokenKind<'static>]] = &[
+      // Unary level
+      &[TokenKind::Exclamation, TokenKind::Minus],
+      &[TokenKind::Multiply, TokenKind::Divide,
+        TokenKind::PercentSign, TokenKind::Caret],
+      &[TokenKind::Plus, TokenKind::Minus],
+      &[TokenKind::Equal, TokenKind::NotEqual,
+        TokenKind::Less, TokenKind::LessEqual,
+        TokenKind::Greater, TokenKind::GreaterEqual],
+      &[TokenKind::Keyword(Keyword::And)],
+      &[TokenKind::Keyword(Keyword::Or)],
+    ];
+    LISTS[prec]
+  }
+
+  fn parse_precedence_expr(&mut self) -> Result<BoxExpression<'ast>> {
+    unimplemented!()
+  }
+
+
   // <>General
 
   fn parse_end(&mut self) -> Result<()> {
@@ -805,6 +859,22 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       TokenKind::Percentage(p) => Some(TokenValue::new(p / 100.0, self.token.span.clone())),
       TokenKind::Integer(i) => Some(TokenValue::new(i as f64, self.token.span.clone())),
       _ => None,
+    }
+  }
+
+  fn unary_token_value(&self) -> Option<TokenValue<UnaryOperator>> {
+    let oper: StdResult<UnaryOperator, ()> = self.token.kind.try_into();
+    match oper {
+      Ok(oper) => Some(TokenValue::new(oper, self.token.span.clone())),
+      Err(()) => None,
+    }
+  }
+
+  fn binary_token_value(&self) -> Option<TokenValue<BinaryOperator>> {
+    let oper: StdResult<BinaryOperator, ()> = self.token.kind.try_into();
+    match oper {
+      Ok(oper) => Some(TokenValue::new(oper, self.token.span.clone())),
+      Err(()) => None,
     }
   }
 
