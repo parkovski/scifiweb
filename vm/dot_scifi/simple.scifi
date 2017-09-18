@@ -1,6 +1,8 @@
 include 'cards.scifi';
 #include 'chests.scifi';
 
-Coin collectable;
+collectable Coin:
+  has amount;
+end;
 
-Player user;
+user Player;

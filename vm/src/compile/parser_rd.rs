@@ -72,12 +72,13 @@ where
   }
 }
 
-impl<'a> TryFrom<TokenKind<'a>> for UnaryOperator {
+impl<'a> TryFrom<TokenKind<'a>> for PrefixOperator {
   type Error = ();
   fn try_from(value: TokenKind<'a>) -> StdResult<Self, ()> {
     match value {
-      TokenKind::Minus => Ok(UnaryOperator::Neg),
-      TokenKind::Exclamation => Ok(UnaryOperator::Not),
+      TokenKind::LParen => Ok(PrefixOperator::Parens),
+      TokenKind::Minus => Ok(PrefixOperator::Neg),
+      TokenKind::Exclamation => Ok(PrefixOperator::Not),
       _ => Err(()),
     }
   }
@@ -87,6 +88,7 @@ impl<'a> TryFrom<TokenKind<'a>> for BinaryOperator {
   type Error = ();
   fn try_from(value: TokenKind<'a>) -> StdResult<Self, ()> {
     Ok(match value {
+      TokenKind::Dot => BinaryOperator::Dot,
       TokenKind::Multiply => BinaryOperator::Mul,
       TokenKind::Divide => BinaryOperator::Div,
       TokenKind::PercentSign => BinaryOperator::Mod,
@@ -99,7 +101,20 @@ impl<'a> TryFrom<TokenKind<'a>> for BinaryOperator {
       TokenKind::LessEqual => BinaryOperator::Le,
       TokenKind::Greater => BinaryOperator::Gt,
       TokenKind::GreaterEqual => BinaryOperator::Ge,
+      TokenKind::Keyword(Keyword::And) => BinaryOperator::And,
+      TokenKind::Keyword(Keyword::Or) => BinaryOperator::Or,
       _ => return Err(()),
+    })
+  }
+}
+
+impl<'a> TryFrom<TokenKind<'a>> for PostfixListOperator {
+  type Error = ();
+  fn try_from(value: TokenKind<'a>) -> StdResult<Self, ()> {
+    Ok(match value {
+      TokenKind::LParen => PostfixListOperator::Call,
+      TokenKind::LSquareBracket => PostfixListOperator::Idx,
+      _ => return Err(())
     })
   }
 }
@@ -208,11 +223,12 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         return Ok(())
       } else if self.token == Keyword::Include {
         self.parse_include()?
-      } else if let TokenKind::Identifier(label) = self.token.kind {
+      } else {
+        let base_type = self.parse_base_custom_type()?;
+        self.expect(TokenMatch::Identifier)?;
         let label = self.string_token_value();
         self.advance()?;
         // An item (type) definition
-        let base_type = self.parse_base_custom_type()?;
         if self.opt_consume(TokenKind::Semicolon)? {
           // Empty item
           base_type.insert_empty_type(self.ast, label)?;
@@ -251,8 +267,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
           }
           self.parse_end()?;
         }
-      } else {
-        return self.e_unexpected();
       }
     }
   }
@@ -610,11 +624,71 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   // <>Expression
 
   fn parse_expression(&mut self) -> Result<BoxExpression<'ast>> {
-    self.parse_expr_primary()
+    self.parse_precedence_expr(0)
+  }
+
+  fn parse_precedence_expr(&mut self, precedence: u8) -> Result<BoxExpression<'ast>> {
+    let mut expr: BoxExpression<'ast>;
+
+    if let Some(prefix) = self.prefix_token_value() {
+      let is_paren = *prefix.value() == PrefixOperator::Parens;
+      self.advance()?;
+      let precedence = prefix.value().precedence();
+      expr = box PrefixExpr::new(
+        prefix,
+        self.parse_precedence_expr(precedence)?
+      );
+      if is_paren {
+        self.consume(TokenKind::RParen)?;
+      }
+    } else {
+      expr = self.parse_primary_expr()?;
+    }
+
+    loop {
+      if let Some(postfix) = self.postfix_token_value() {
+        if PostfixListOperator::PRECEDENCE < precedence {
+          break;
+        }
+        let close = match *postfix.value() {
+          PostfixListOperator::Call => TokenKind::RParen,
+          PostfixListOperator::Idx => TokenKind::RSquareBracket,
+        };
+        self.advance()?;
+        let list = self.parse_list(
+          TokenKind::Comma,
+          Self::parse_expression,
+          Vec::new(),
+          Vec::push,
+        )?;
+        expr = box PostfixListExpr::new(postfix, expr, list);
+        self.consume(close)?;
+      } else if let Some(binary) = self.binary_token_value() {
+        let binary_precedence = binary.value().precedence();
+        if binary_precedence < precedence {
+          break;
+        }
+
+        let next_precedence = if binary.value().right_recursive() {
+          binary_precedence
+        } else {
+          binary_precedence + 1
+        };
+        self.advance()?;
+        expr = box BinaryExpr::new(
+          binary,
+          expr,
+          self.parse_precedence_expr(next_precedence)?
+        );
+      } else {
+        break;
+      }
+    }
+    Ok(expr)
   }
 
   /// primary = ident | amount | literal
-  fn parse_expr_primary(&mut self) -> Result<BoxExpression<'ast>> {
+  fn parse_primary_expr(&mut self) -> Result<BoxExpression<'ast>> {
     if self.token == TokenMatch::Identifier {
       let tv = self.string_token_value();
       self.advance()?;
@@ -708,11 +782,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     ];
     LISTS[prec]
   }
-
-  fn parse_precedence_expr(&mut self) -> Result<BoxExpression<'ast>> {
-    unimplemented!()
-  }
-
 
   // <>General
 
@@ -862,8 +931,8 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     }
   }
 
-  fn unary_token_value(&self) -> Option<TokenValue<UnaryOperator>> {
-    let oper: StdResult<UnaryOperator, ()> = self.token.kind.try_into();
+  fn prefix_token_value(&self) -> Option<TokenValue<PrefixOperator>> {
+    let oper: StdResult<PrefixOperator, ()> = self.token.kind.try_into();
     match oper {
       Ok(oper) => Some(TokenValue::new(oper, self.token.span.clone())),
       Err(()) => None,
@@ -872,6 +941,14 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   fn binary_token_value(&self) -> Option<TokenValue<BinaryOperator>> {
     let oper: StdResult<BinaryOperator, ()> = self.token.kind.try_into();
+    match oper {
+      Ok(oper) => Some(TokenValue::new(oper, self.token.span.clone())),
+      Err(()) => None,
+    }
+  }
+
+  fn postfix_token_value(&self) -> Option<TokenValue<PostfixListOperator>> {
+    let oper: StdResult<PostfixListOperator, ()> = self.token.kind.try_into();
     match oper {
       Ok(oper) => Some(TokenValue::new(oper, self.token.span.clone())),
       Err(()) => None,

@@ -1,28 +1,43 @@
-Card collectable group:
+collectable group Card:
   has amount;
-  property foo array of integer;
-  property bar array x 10 of array of CommonCard;
+  property level integer = 1 + `x = y or a.b[0, 1, -2]().c * a - !b;
   has collectable group [CommonCard, RareCard];
-  has upgrades;
 end;
 
-CommonCard collectable group:
+collectable group CommonCard:
   has collectable [
     Bomb, Bow, Sword
   ];
+  has upgrades;# for level:
+    #award +1 for .level = 1 and .amount = 5 and cost 10 x Coin;
+    #award +1 for .level = 2 and .amount = 10 and cost 20 x Coin;
+    #award +1 for .level = 3 and .amount = 25 and cost 30 x Coin;
+    #award +1 for .level = 4 and .amount = 50 and cost 50 x Coin;
+    #award +1 for .level = 5 and .amount = 150 and cost 100 x Coin;
+    #award +1 for .level = 6 and .amount = 350 and cost 200 x Coin;
+    #award +1 for .level = 7 and .amount = 1000 and cost 350 x Coin;
+    #award +1 for .level = 8 and .amount = 5000 and cost 500 x Coin;
+  #end;
 end;
 
-RareCard collectable group:
+collectable group RareCard:
   has collectable [
     FireBow, FreezeRay
   ];
+  has upgrades;# for level:
+    #award +1 for .level = 1 and .amount = 5 and cost 10 x Coin;
+    #award +1 for .level = 2 and .amount = 10 and cost 25 x Coin;
+    #award +1 for .level = 3 and .amount = 50 and cost 50 x Coin;
+    #award +1 for .level = 4 and .amount = 250 and cost 125 x Coin;
+    #award +1 for .level = 5 and .amount = 1500 and cost 300 x Coin;
+  #end;
 end;
 
 # Common cards
-Bomb collectable;
-Bow collectable;
-Sword collectable;
+collectable Bomb;
+collectable Bow;
+collectable Sword;
 
 # Rare cards
-FireBow collectable;
-FreezeRay collectable;
+collectable FireBow;
+collectable FreezeRay;

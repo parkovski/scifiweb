@@ -8,28 +8,50 @@ use ast::errors::*;
 use super::{Expression, BoxExpression};
 
 #[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
-pub enum UnaryOperator {
+pub enum PrefixOperator {
+  Parens,
   Not,
   Neg,
 }
 
-impl UnaryOperator {
-  pub fn as_str(&self) -> &'static str {
+impl PrefixOperator {
+  pub fn str_before(&self) -> &'static str {
     match *self {
-      UnaryOperator::Not => "!",
-      UnaryOperator::Neg => "-",
+      PrefixOperator::Parens => "(",
+      PrefixOperator::Not => "!",
+      PrefixOperator::Neg => "-",
+    }
+  }
+
+  pub fn str_after(&self) -> Option<&'static str> {
+    if *self == PrefixOperator::Parens {
+      Some(")")
+    } else {
+      None
+    }
+  }
+
+  pub fn precedence(&self) -> u8 {
+    match *self {
+      PrefixOperator::Parens => 0,
+      _ => 6,
     }
   }
 }
 
-impl Display for UnaryOperator {
+impl Display for PrefixOperator {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    f.write_str(self.as_str())
+    f.write_str(self.str_before())?;
+    if let Some(after) = self.str_after() {
+      f.write_str(after)?;
+    }
+    Ok(())
   }
 }
 
 #[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
+  Dot,
   Mul,
   Div,
   Mod,
@@ -47,8 +69,9 @@ pub enum BinaryOperator {
 }
 
 impl BinaryOperator {
-  fn as_str(&self) -> &'static str {
+  pub fn as_str(&self) -> &'static str {
     match *self {
+      BinaryOperator::Dot => ".",
       BinaryOperator::Mul => "*",
       BinaryOperator::Div => "/",
       BinaryOperator::Mod => "%",
@@ -66,15 +89,17 @@ impl BinaryOperator {
     }
   }
 
-  fn precedence(&self) -> u8 {
+  pub fn precedence(&self) -> u8 {
     match *self {
+      | BinaryOperator::Dot => 7,
+
       | BinaryOperator::Mul
       | BinaryOperator::Div
       | BinaryOperator::Mod
-      | BinaryOperator::Pow => 1,
+      | BinaryOperator::Pow => 5,
 
       | BinaryOperator::Add
-      | BinaryOperator::Sub => 2,
+      | BinaryOperator::Sub => 4,
 
       | BinaryOperator::Eq
       | BinaryOperator::Ne
@@ -83,35 +108,69 @@ impl BinaryOperator {
       | BinaryOperator::Gt
       | BinaryOperator::Ge => 3,
 
-      | BinaryOperator::And => 4,
+      | BinaryOperator::And => 2,
 
-      | BinaryOperator::Or => 5,
+      | BinaryOperator::Or => 1,
     }
+  }
+
+  pub fn right_recursive(&self) -> bool {
+    *self == BinaryOperator::Pow
   }
 }
 
 impl Display for BinaryOperator {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    f.write_str(self.as_str())
+    write!(f, "{}", self.as_str())
+  }
+}
+
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
+pub enum PostfixListOperator {
+  Call,
+  Idx,
+}
+
+impl PostfixListOperator {
+  pub const PRECEDENCE: u8 = 7;
+
+  pub fn str_before(&self) -> &'static str {
+    match *self {
+      PostfixListOperator::Call => "(",
+      PostfixListOperator::Idx => "[",
+    }
+  }
+
+  pub fn str_after(&self) -> &'static str {
+    match *self {
+      PostfixListOperator::Call => ")",
+      PostfixListOperator::Idx => "]",
+    }
+  }
+}
+
+impl Display for PostfixListOperator {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}{}", self.str_before(), self.str_after())
   }
 }
 
 #[derive(Debug, Serialize)]
-pub struct UnaryExpr<'a> {
-  operator: TokenValue<UnaryOperator>,
+pub struct PrefixExpr<'a> {
+  operator: TokenValue<PrefixOperator>,
   subexpr: BoxExpression<'a>,
   ty: Later<ItemRef<'a, Type<'a>>>,
   span: TokenSpan,
 }
 
-impl<'a> UnaryExpr<'a> {
+impl<'a> PrefixExpr<'a> {
   pub fn new(
-    operator: TokenValue<UnaryOperator>,
+    operator: TokenValue<PrefixOperator>,
     subexpr: BoxExpression<'a>,
   ) -> Self
   {
     let span = operator.span().from_to(subexpr.span());
-    UnaryExpr {
+    PrefixExpr {
       operator,
       subexpr,
       ty: Later::new(),
@@ -120,13 +179,22 @@ impl<'a> UnaryExpr<'a> {
   }
 }
 
-impl<'a> Display for UnaryExpr<'a> {
+impl<'a> Display for PrefixExpr<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}{}", self.operator, self.subexpr)
+    write!(
+      f,
+      "{}{}",
+      self.operator.value().str_before(),
+      self.subexpr,
+    )?;
+    if let Some(after) = self.operator.value().str_after() {
+      f.write_str(after)?;
+    }
+    Ok(())
   }
 }
 
-impl<'a> SourceItem for UnaryExpr<'a> {
+impl<'a> SourceItem for PrefixExpr<'a> {
   fn span(&self) -> &TokenSpan {
     &self.span
   }
@@ -140,7 +208,7 @@ impl<'a> SourceItem for UnaryExpr<'a> {
   }
 }
 
-impl<'a> Expression<'a> for UnaryExpr<'a> {
+impl<'a> Expression<'a> for PrefixExpr<'a> {
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.ty.item().unwrap()
   }
@@ -179,7 +247,7 @@ impl<'a> BinaryExpr<'a> {
 
 impl<'a> Display for BinaryExpr<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{} {} {}", self.left, self.operator, self.right)
+    write!(f, "{} {} {}", self.left, self.operator.value().as_str(), self.right)
   }
 }
 
@@ -205,5 +273,69 @@ impl<'a> Expression<'a> for BinaryExpr<'a> {
 
   fn is_constant(&self) -> bool {
     self.left.is_constant() && self.right.is_constant()
+  }
+}
+
+#[derive(Debug, Serialize)]
+pub struct PostfixListExpr<'a> {
+  operator: TokenValue<PostfixListOperator>,
+  left: BoxExpression<'a>,
+  right: Vec<BoxExpression<'a>>,
+  ty: Later<ItemRef<'a, Type<'a>>>,
+  span: TokenSpan,
+}
+
+impl<'a> PostfixListExpr<'a> {
+  pub fn new(
+    operator: TokenValue<PostfixListOperator>,
+    left: BoxExpression<'a>,
+    right: Vec<BoxExpression<'a>>,
+  ) -> Self
+  {
+    let span = left.span().from_to(operator.span());
+    PostfixListExpr {
+      operator,
+      left,
+      right,
+      ty: Later::new(),
+      span,
+    }
+  }
+}
+
+impl<'a> Display for PostfixListExpr<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(
+      f,
+      "{}{}{:?}{}",
+      self.left,
+      self.operator.value().str_before(),
+      self.right,
+      self.operator.value().str_after(),
+    )
+  }
+}
+
+impl<'a> SourceItem for PostfixListExpr<'a> {
+  fn span(&self) -> &TokenSpan {
+    &self.span
+  }
+
+  fn resolve(&mut self) -> Result<()> {
+    Ok(())
+  }
+
+  fn typecheck(&mut self) -> Result<()> {
+    Ok(())
+  }
+}
+
+impl<'a> Expression<'a> for PostfixListExpr<'a> {
+  fn ty(&self) -> GraphRef<'a, Type<'a>> {
+    self.ty.item().unwrap()
+  }
+
+  fn is_constant(&self) -> bool {
+    false
   }
 }

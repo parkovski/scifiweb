@@ -40,16 +40,16 @@ end;
 
 distribution of Card SmallChestRewards:
   amount range(10, 15);
-  group range(2, 4) of [
-    CommonCard weighted 75%,
-    RareCard
+  group x range(2, 4) of [
+    CommonCard weighted 95%,
+    RareCard x max 2
   ];
 end;
 
 distribution of Card LargeChestRewards:
   amount range(20, 25);
-  group range (3, 5) of [
-    CommonCard weighted 70%,
-    RareCard
+  group x range (3, 5) of [
+    CommonCard weighted 85%,
+    RareCard x max 4
   ]
 end;

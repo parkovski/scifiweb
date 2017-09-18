@@ -36,7 +36,9 @@ impl<T> ExpressionAsSerialize for T where T: ErasedSerialize {
 }
 
 impl<'a> Serialize for Expression<'a> {
-  fn serialize<S: Serializer>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error> {
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
     self.as_serialize().serialize(serializer)
   }
 }
