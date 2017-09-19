@@ -402,8 +402,8 @@ impl<'a> Named for Type<'a> {
   }
 }
 
-impl_name_traits!(@all Type, <'a>);
-named_display!(Type, <'a>);
+impl_name_traits!(@all Type<'a>);
+named_display!(Type<'a>);
 
 impl<'a> SourceItem for Type<'a> {
   fn span(&self) -> &TokenSpan {

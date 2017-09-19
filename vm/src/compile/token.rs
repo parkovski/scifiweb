@@ -11,6 +11,7 @@ use serde::ser::{Serialize, Serializer, SerializeStruct};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct TokenSpan {
+  #[serde(skip)]
   pub filename: Arc<PathBuf>,
   pub line: usize,
   pub end_line: usize,

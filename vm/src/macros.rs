@@ -40,7 +40,7 @@ macro_rules! generic_name_short {
 /// by a unique name so they can be compared and
 /// be stored and looked up by name in a hash set.
 macro_rules! impl_name_traits {
-  ($ty:ident, $($bounds:tt)*) => (
+  ($ty:ident $($bounds:tt)*) => (
     impl $($bounds)* PartialEq for generic_name_short!($ty $($bounds)*) {
       fn eq(&self, other: &Self) -> bool {
         self.name() == other.name()
@@ -65,8 +65,8 @@ macro_rules! impl_name_traits {
       }
     }
   );
-  (@all $ty:ident, $($bounds:tt)*) => (
-    impl_name_traits!($ty, $($bounds)*);
+  (@all $ty:ident $($bounds:tt)*) => (
+    impl_name_traits!($ty $($bounds)*);
 
     impl $($bounds)* Eq for generic_name_short!($ty $($bounds)*) {}
 
@@ -79,7 +79,7 @@ macro_rules! impl_name_traits {
 }
 
 macro_rules! named_display {
-  ($ty:ident, $($bounds:tt)*) => (
+  ($ty:ident $($bounds:tt)*) => (
     impl $($bounds)* ::std::fmt::Display for generic_name_short!($ty $($bounds)*) {
       fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         let item_name = self.item_name();
@@ -91,13 +91,10 @@ macro_rules! named_display {
       }
     }
   );
-  ($ty:ident) => (
-    named_display!($ty,);
-  )
 }
 
 macro_rules! impl_named {
-  ($ty:ident, $item_name:expr, $($bounds:tt)*) => (
+  ($item_name:expr, $ty:ident $($bounds:tt)*) => (
     impl $($bounds)* ::ast::Named for generic_name_short!($ty $($bounds)*) {
       fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
         &self.name
@@ -108,7 +105,7 @@ macro_rules! impl_named {
       }
     }
   );
-  (type $ty:ident, $($bounds:tt)*) => (
+  (type $ty:ident $($bounds:tt)*) => (
     impl $($bounds)* ::ast::Named for generic_name_short!($ty $($bounds)*) {
       fn name(&self) -> &::compile::TokenValue<::std::sync::Arc<str>> {
         &self.name

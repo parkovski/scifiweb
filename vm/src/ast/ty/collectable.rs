@@ -105,9 +105,9 @@ impl<'a> CollectableGroup<'a> {
   }
 }
 
-impl_named!(type CollectableGroup, <'a>);
-impl_name_traits!(CollectableGroup, <'a>);
-named_display!(CollectableGroup, <'a>);
+impl_named!(type CollectableGroup<'a>);
+impl_name_traits!(CollectableGroup<'a>);
+named_display!(CollectableGroup<'a>);
 
 impl<'a> SourceItem for CollectableGroup<'a> {
   fn span(&self) -> &TokenSpan {
@@ -229,9 +229,9 @@ impl<'a> Collectable<'a> {
   }
 }
 
-impl_named!(type Collectable, <'a>);
-impl_name_traits!(Collectable, <'a>);
-named_display!(Collectable, <'a>);
+impl_named!(type Collectable<'a>);
+impl_name_traits!(Collectable<'a>);
+named_display!(Collectable<'a>);
 
 impl<'a> SourceItem for Collectable<'a> {
   fn span(&self) -> &TokenSpan {

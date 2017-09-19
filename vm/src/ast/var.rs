@@ -35,10 +35,52 @@ impl<'a> Variable<'a> {
   }
 }
 
-impl_named!(Variable, "variable", <'a>);
-named_display!(Variable, <'a>);
+impl_named!("variable", Variable<'a>);
+named_display!(Variable<'a>);
 
 impl<'a> SourceItem for Variable<'a> {
+  fn span(&self) -> &TokenSpan {
+    self.name.span()
+  }
+
+  fn resolve(&mut self) -> Result<()> {
+    Ok(())
+  }
+
+  fn typecheck(&mut self) -> Result<()> {
+    Ok(())
+  }
+}
+
+/// Sets the initial value of an inherited variable.
+#[derive(Debug, Serialize)]
+pub struct DefaultValue<'a> {
+  name: TokenValue<Arc<str>>,
+  scope: GraphRef<'a, Scope<'a>>,
+  value: BoxExpression<'a>,
+  var: ItemRef<'a, Variable<'a>>,
+}
+
+impl<'a> DefaultValue<'a> {
+  pub fn new(
+    name: TokenValue<Arc<str>>,
+    scope: GraphRef<'a, Scope<'a>>,
+    value: BoxExpression<'a>
+  ) -> Self
+  {
+    DefaultValue {
+      name: name.clone(),
+      value,
+      scope,
+      var: ItemRef::new(name),
+    }
+  }
+}
+
+impl_named!("default", DefaultValue<'a>);
+named_display!(DefaultValue<'a>);
+
+impl<'a> SourceItem for DefaultValue<'a> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }

@@ -38,9 +38,9 @@ pub struct Array<'a> {
   max_length: Option<u32>,
 }
 
-impl_named!(type Array, <'a>);
-impl_name_traits!(Array, <'a>);
-named_display!(Array, <'a>);
+impl_named!(type Array<'a>);
+impl_name_traits!(Array<'a>);
+named_display!(Array<'a>);
 
 impl<'a> Array<'a> {
   pub fn new(

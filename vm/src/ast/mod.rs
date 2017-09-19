@@ -106,7 +106,7 @@ macro_rules! item_ref_impls {
       }
     }
 
-    named_display!($t, <'a, T: Named + 'a>);
+    named_display!($t<'a, T: Named + 'a>);
   );
 }
 

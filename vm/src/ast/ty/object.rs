@@ -14,9 +14,9 @@ pub struct Object<'a> {
   super_type: Option<ItemRef<'a, Object<'a>>>,
 }
 
-impl_named!(type Object, <'a>);
-impl_name_traits!(Object, <'a>);
-named_display!(Object, <'a>);
+impl_named!(type Object<'a>);
+impl_name_traits!(Object<'a>);
+named_display!(Object<'a>);
 
 impl<'a> Object<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {

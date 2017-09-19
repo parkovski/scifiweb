@@ -60,9 +60,9 @@ pub struct UserGroup<'a> {
   precedence: Precedence<'a>,
 }
 
-impl_named!(type UserGroup, <'a>);
-impl_name_traits!(UserGroup, <'a>);
-named_display!(UserGroup, <'a>);
+impl_named!(type UserGroup<'a>);
+impl_name_traits!(UserGroup<'a>);
+named_display!(UserGroup<'a>);
 
 impl<'a> UserGroup<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
@@ -117,9 +117,9 @@ pub struct User<'a> {
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
 }
 
-impl_named!(type User, <'a>);
-impl_name_traits!(User, <'a>);
-named_display!(User, <'a>);
+impl_named!(type User<'a>);
+impl_name_traits!(User<'a>);
+named_display!(User<'a>);
 
 impl<'a> User<'a> {
   pub fn new(name: TokenValue<Arc<str>>) -> Self {
