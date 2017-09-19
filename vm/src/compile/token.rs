@@ -9,9 +9,8 @@ use std::default::Default;
 use fxhash::FxHashMap;
 use serde::ser::{Serialize, Serializer, SerializeStruct};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TokenSpan {
-  #[serde(skip)]
   pub filename: Arc<PathBuf>,
   pub line: usize,
   pub end_line: usize,
@@ -43,6 +42,22 @@ impl TokenSpan {
 impl Display for TokenSpan {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}: ({}, {})", &self.filename.display(), self.line, self.start)
+  }
+}
+
+impl Serialize for TokenSpan {
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
+    serializer.serialize_str(
+      &format!(
+        "({}, {}) : ({}, {})",
+        self.line,
+        self.start,
+        self.end_line,
+        self.end,
+      )
+    )
   }
 }
 

@@ -3,7 +3,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::fmt::{self, Display, Debug};
-use serde::ser::{Serialize, Serializer, SerializeTupleStruct};
+use serde::ser::{Serialize, Serializer};
 
 const EMPTY_ERROR: &'static str = "Accessed Later value before initialization";
 
@@ -109,8 +109,6 @@ impl<T> DerefMut for Later<T> {
 
 impl<T: Serialize> Serialize for Later<T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("Later", 1)?;
-    state.serialize_field(&self.value)?;
-    state.end()
+    serializer.serialize_newtype_struct("Later", &self.value)
   }
 }

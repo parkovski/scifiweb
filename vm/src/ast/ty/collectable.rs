@@ -30,6 +30,7 @@ pub struct CollectableGroup<'a> {
 
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
 
+  scope: GraphCell<Scope<'a>>,
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
 
   collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
@@ -47,6 +48,7 @@ impl<'a> CollectableGroup<'a> {
       ast_ref: Later::new(),
       auto_grouping: AutoGrouping::Inherit,
       parent: None,
+      scope: Scope::new(),
       properties: Default::default(),
       collectables: Default::default(),
       sub_groups: Default::default(),

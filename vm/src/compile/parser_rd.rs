@@ -767,22 +767,6 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   }
 */
 
-  fn operators_for_precedence(&self, prec: usize) -> &'static [TokenKind<'static>] {
-    static LISTS: &[&'static [TokenKind<'static>]] = &[
-      // Unary level
-      &[TokenKind::Exclamation, TokenKind::Minus],
-      &[TokenKind::Multiply, TokenKind::Divide,
-        TokenKind::PercentSign, TokenKind::Caret],
-      &[TokenKind::Plus, TokenKind::Minus],
-      &[TokenKind::Equal, TokenKind::NotEqual,
-        TokenKind::Less, TokenKind::LessEqual,
-        TokenKind::Greater, TokenKind::GreaterEqual],
-      &[TokenKind::Keyword(Keyword::And)],
-      &[TokenKind::Keyword(Keyword::Or)],
-    ];
-    LISTS[prec]
-  }
-
   // <>General
 
   fn parse_end(&mut self) -> Result<()> {

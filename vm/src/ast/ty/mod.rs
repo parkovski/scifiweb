@@ -1,7 +1,7 @@
 use std::fmt::{self, Debug, Display};
 use std::mem;
 use std::iter::Iterator;
-use serde::ser::{Serialize, Serializer, SerializeTupleVariant};
+use serde::ser::{Serialize, Serializer};
 use erased_serde::Serialize as ErasedSerialize;
 use util::graph_cell::*;
 use compile::{TokenValue, TokenSpan};
@@ -434,14 +434,10 @@ impl<'a> Serialize for Type<'a> {
   {
     match *self {
       Type::Primitive(ref t, _) => {
-        let mut tv = serializer.serialize_tuple_variant("Type", 0, "Primitive", 1)?;
-        tv.serialize_field(t)?;
-        tv.end()
+        serializer.serialize_newtype_variant("Type", 0, "Primitive", t)
       }
       Type::Custom(ref t) => {
-        let mut tv = serializer.serialize_tuple_variant("Type", 1, "Custom", 1)?;
-        tv.serialize_field(t.as_serialize())?;
-        tv.end()
+        serializer.serialize_newtype_variant("Type", 1, "Custom", t)
       }
     }
   }

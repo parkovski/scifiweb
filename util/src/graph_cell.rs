@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use std::fmt::{self, Debug, Display};
 use std::mem;
 use serde::{Serialize, Serializer};
-use serde::ser::{SerializeStruct, SerializeTupleStruct};
+use serde::ser::{SerializeStruct};
 
 // =====
 
@@ -165,7 +165,7 @@ impl<T: CoerceUnsized<U>, U> CoerceUnsized<GraphCell<U>> for GraphCell<T>
 impl<T: Serialize> Serialize for GraphCell<T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
     let mut state = serializer.serialize_struct("GraphCell", 2)?;
-    state.serialize_field("data", unsafe { &*self.data.get() })?;
+    state.serialize_field("data", &*self.awake())?;
     state.serialize_field("ptr", &format!("{:p}", self.data.get()))?;
     state.end()
   }
@@ -261,9 +261,9 @@ where
 
 impl<'a, T: ?Sized + 'a> Serialize for GraphRef<'a, T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("GraphRef", 1)?;
-    state.serialize_field(&format!("{:p}", self.data))?;
-    state.end()
+    serializer.serialize_newtype_struct(
+      "GraphRef", &format!("{:p}", self.data)
+    )
   }
 }
 
@@ -374,9 +374,10 @@ where
 
 impl<'a, T: ?Sized + 'a> Serialize for GraphRefMut<'a, T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("GraphRefMut", 1)?;
-    state.serialize_field(&format!("{:p}", self.data))?;
-    state.end()
+    serializer.serialize_newtype_struct(
+      "GraphRefMut",
+      &format!("{:p}", self.data)
+    )
   }
 }
 
@@ -446,9 +447,7 @@ where
 
 impl<'a, T: ?Sized + Serialize + 'a> Serialize for GraphRefAwake<'a, T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("GraphRefAwake", 1)?;
-    state.serialize_field(self.data)?;
-    state.end()
+    serializer.serialize_newtype_struct("GraphRefAwake", self.data)
   }
 }
 
@@ -538,8 +537,6 @@ where
 
 impl<'a, T: ?Sized + Serialize + 'a> Serialize for GraphRefAwakeMut<'a, T> {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("GraphRefAwakeMut", 1)?;
-    state.serialize_field(self.data)?;
-    state.end()
+    serializer.serialize_newtype_struct("GraphRefAwakeMut", self.data)
   }
 }

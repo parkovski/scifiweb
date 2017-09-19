@@ -25,7 +25,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::{HashMap, Entry};
 use std::hash::{Hash, BuildHasher};
 use fxhash::FxHashSet;
-use serde::ser::{Serialize, Serializer, SerializeTupleStruct};
+use serde::ser::{Serialize, Serializer};
 use futures::Future;
 use future::SFFuture;
 use self::graph_cell::{GraphCell, GraphRefMut};
@@ -114,9 +114,7 @@ impl SharedStrings {
 
 impl Serialize for SharedStrings {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    let mut state = serializer.serialize_tuple_struct("SharedStrings", 1)?;
-    state.serialize_field(&*self.strings.borrow())?;
-    state.end()
+    serializer.serialize_newtype_struct("SharedStrings", &*self.strings.borrow())
   }
 }
 
