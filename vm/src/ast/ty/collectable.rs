@@ -2,7 +2,7 @@ use std::sync::Arc;
 use fxhash::FxHashMap;
 use util::graph_cell::*;
 use util::later::Later;
-use util::{InsertUnique, InsertGraphCell};
+use util::{InsertUnique};
 use compile::{TokenSpan, TokenValue};
 use ast::var::Variable;
 use super::*;
@@ -31,7 +31,6 @@ pub struct CollectableGroup<'a> {
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
 
   scope: GraphCell<Scope<'a>>,
-  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
 
   collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
   sub_groups: FxHashMap<Arc<str>, ItemRefMut<'a, CollectableGroup<'a>>>,
@@ -41,15 +40,14 @@ pub struct CollectableGroup<'a> {
 }
 
 impl<'a> CollectableGroup<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
     CollectableGroup {
       name,
       self_ref: Later::new(),
       ast_ref: Later::new(),
       auto_grouping: AutoGrouping::Inherit,
       parent: None,
-      scope: Scope::new(),
-      properties: Default::default(),
+      scope: Scope::child(parent_scope),
       collectables: Default::default(),
       sub_groups: Default::default(),
       upgrades: None,
@@ -63,19 +61,6 @@ impl<'a> CollectableGroup<'a> {
 
   pub fn set_auto_grouping(&mut self, ag: AutoGrouping) {
     self.auto_grouping = ag;
-  }
-
-  pub fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
-    let gr = self.properties.insert_graph_cell(p.name().value().clone(), p);
-    match gr {
-      Ok(_) => Ok(()),
-      Err(p) => Err(
-        ErrorKind::DuplicateDefinition(
-          p.name().clone(),
-          "property"
-        ).into()
-      )
-    }
   }
 
   pub fn insert_collectable_ref(&mut self, r: ItemRefMut<'a, Collectable<'a>>) -> Result<()> {
@@ -107,9 +92,14 @@ impl<'a> CollectableGroup<'a> {
   }
 }
 
-impl_named!(type CollectableGroup<'a>);
-impl_name_traits!(CollectableGroup<'a>);
-named_display!(CollectableGroup<'a>);
+type_macros!(
+  CollectableGroup<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for CollectableGroup<'a> {
   fn span(&self) -> &TokenSpan {
@@ -157,7 +147,7 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
   }
 
   fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
-    self.properties.get(name).map(|p| p.asleep())
+    self.scope.awake().find(name)
   }
 
   fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
@@ -180,7 +170,7 @@ pub struct Collectable<'a> {
   name: TokenValue<Arc<str>>,
   parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
   auto_grouping: AutoGrouping,
-  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
+  scope: GraphCell<Scope<'a>>,
   upgrades: Option<Vec<Upgrade>>,
   redemptions: Option<Vec<Redemption>>,
 }
@@ -188,6 +178,7 @@ pub struct Collectable<'a> {
 impl<'a> Collectable<'a> {
   pub fn new(
     name: TokenValue<Arc<str>>,
+    parent_scope: GraphRef<'a, Scope<'a>>,
   )
     -> Self
   {
@@ -195,7 +186,7 @@ impl<'a> Collectable<'a> {
       name,
       parent: None,
       auto_grouping: AutoGrouping::Inherit,
-      properties: Default::default(),
+      scope: Scope::child(parent_scope),
       upgrades: None,
       redemptions: None,
     }
@@ -209,19 +200,6 @@ impl<'a> Collectable<'a> {
     self.auto_grouping = auto_grouping;
   }
 
-  pub fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
-    let gr = self.properties.insert_graph_cell(p.name().value().clone(), p);
-    match gr {
-      Ok(_) => Ok(()),
-      Err(p) => Err(
-        ErrorKind::DuplicateDefinition(
-          p.name().clone(),
-          "property"
-        ).into()
-      ),
-    }
-  }
-
   pub fn insert_upgrades(&mut self, upgrades: Vec<Upgrade>) {
     self.upgrades = Some(upgrades);
   }
@@ -231,9 +209,14 @@ impl<'a> Collectable<'a> {
   }
 }
 
-impl_named!(type Collectable<'a>);
-impl_name_traits!(Collectable<'a>);
-named_display!(Collectable<'a>);
+type_macros!(
+  Collectable<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for Collectable<'a> {
   fn span(&self) -> &TokenSpan {

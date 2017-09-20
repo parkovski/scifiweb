@@ -209,8 +209,18 @@ impl BaseCustomType {
         ).into());
       }
       BaseCustomType::Object => { Ast::insert_type(ast, Object::new(name))?; }
-      BaseCustomType::Collectable => { Ast::insert_type(ast, Collectable::new(name))?; }
-      BaseCustomType::CollectableGroup => { Ast::insert_type(ast, CollectableGroup::new(name))?; }
+      BaseCustomType::Collectable => {
+        Ast::insert_type(
+          ast,
+          Collectable::new(name, ast.awake().scope())
+        )?;
+      }
+      BaseCustomType::CollectableGroup => {
+        Ast::insert_type(
+          ast,
+          CollectableGroup::new(name, ast.awake().scope())
+        )?;
+      }
       BaseCustomType::User => { Ast::insert_type(ast, User::new(name))?; }
       BaseCustomType::UserGroup => { Ast::insert_type(ast, UserGroup::new(name))?; }
       BaseCustomType::Event => { Ast::insert_type(ast, Event::new(name))?; }

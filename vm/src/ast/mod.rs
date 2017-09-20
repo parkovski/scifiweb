@@ -145,7 +145,7 @@ pub struct Ast<'a> {
   primitive_types: Later<PrimitiveTypeSet<'a>>,
   #[serde(skip)]
   array_names: FxHashMap<ArrayName, Arc<str>>,
-  global_scope: GraphCell<Scope<'a>>,
+  scope: GraphCell<Scope<'a>>,
   strings: SharedStrings,
   /// The path "(internal)" for things with no code location.
   #[serde(skip)]
@@ -158,7 +158,7 @@ impl<'a> Ast<'a> {
       types: Default::default(),
       primitive_types: Later::new(),
       array_names: Default::default(),
-      global_scope: Scope::new(),
+      scope: Scope::new(),
       strings: SharedStrings::new(),
       internal_path: Arc::new(Path::new("(internal)").into()),
     });
@@ -261,10 +261,6 @@ impl<'a> Ast<'a> {
       Self::insert_type(this, array).unwrap().asleep_ref()
     }
   }
-
-  pub fn global_scope(&self) -> GraphRefMut<'a, Scope<'a>> {
-    self.global_scope.asleep_mut()
-  }
 }
 
 impl<'a> Owner<'a, Type<'a>> for Ast<'a> {
@@ -295,6 +291,8 @@ where
     gr.map_opt(|t| t.as_custom().and_then(T::try_cast))
   }
 }
+
+impl_scoped!('a, Ast<'a>);
 
 /*
 pub struct Upgrade {

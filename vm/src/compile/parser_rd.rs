@@ -125,7 +125,6 @@ pub struct Parser<'p, 'ast: 'p> {
   included_paths: &'p mut FxHashSet<Arc<PathBuf>>,
   inp: &'p [u8],
   ast: GraphRefMut<'ast, Ast<'ast>>,
-  scope: GraphRefMut<'ast, Scope<'ast>>,
 }
 
 impl<'p, 'ast: 'p> Parser<'p, 'ast> {
@@ -139,14 +138,12 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   {
     let token_span = TokenSpan::new(filename.clone());
     let token = Token::new(TokenKind::Invalid('\0'), token_span);
-    let scope = ast.awake().global_scope();
     Parser {
       filename,
       token,
       included_paths,
       inp,
       ast,
-      scope,
     }
   }
 
@@ -425,7 +422,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   fn parse_collectable_group(&mut self, label: TokenValue<Arc<str>>)
     -> Result<CollectableGroup<'ast>>
   {
-    let mut group = CollectableGroup::new(label);
+    let mut group = CollectableGroup::new(label, self.ast.awake().scope());
     group.set_auto_grouping(self.parse_auto_grouping()?);
     let mut vec = Self::all_init(&[
       Self::parse_has_collectable,
@@ -439,7 +436,8 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     ]);
     loop {
       if self.opt_consume(Keyword::Property)? {
-        group.insert_property(self.parse_property()?)?;
+        let scope = group.scope_mut();
+        scope.awake_mut().insert(self.parse_property(scope)?)?;
         self.consume(TokenKind::Semicolon)?;
       } else if self.token == Keyword::Has {
         if !Self::all_done(&vec) {
@@ -458,7 +456,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   fn parse_collectable(&mut self, label: TokenValue<Arc<str>>)
     -> Result<Collectable<'ast>>
   {
-    let mut collectable = Collectable::new(label);
+    let mut collectable = Collectable::new(label, self.ast.awake().scope());
     collectable.set_auto_grouping(self.parse_auto_grouping()?);
     let mut vec = Self::all_init(&[
       |this: &mut Self, coll: &mut Collectable<'ast>| -> Result<()> {
@@ -470,7 +468,8 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     ]);
     loop {
       if self.opt_consume(Keyword::Property)? {
-        collectable.insert_property(self.parse_property()?)?;
+        let scope = collectable.scope_mut();
+        scope.awake_mut().insert(self.parse_property(scope)?)?;
         self.consume(TokenKind::Semicolon)?;
       } else if self.token == Keyword::Has {
         if !Self::all_done(&vec) {
@@ -608,7 +607,9 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   // <>Variable
 
   /// property <name> <type>
-  fn parse_property(&mut self) -> Result<Variable<'ast>> {
+  fn parse_property(&mut self, scope: GraphRefMut<'ast, Scope<'ast>>)
+    -> Result<Variable<'ast>>
+  {
     self.expect(TokenMatch::Identifier)?;
     let name = self.string_token_value();
     self.advance()?;
@@ -616,18 +617,26 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     let mut var = Variable::new(name, ty);
     if self.token == TokenKind::Equal {
       self.advance()?;
-      var.set_initial(self.parse_expression()?);
+      var.set_initial(self.parse_expression(scope)?);
     }
     Ok(var)
   }
 
   // <>Expression
 
-  fn parse_expression(&mut self) -> Result<BoxExpression<'ast>> {
-    self.parse_precedence_expr(0)
+  fn parse_expression(&mut self, scope: GraphRefMut<'ast, Scope<'ast>>)
+    -> Result<BoxExpression<'ast>>
+  {
+    self.parse_precedence_expr(0, scope)
   }
 
-  fn parse_precedence_expr(&mut self, precedence: u8) -> Result<BoxExpression<'ast>> {
+  fn parse_precedence_expr(
+    &mut self,
+    precedence: u8,
+    scope: GraphRefMut<'ast, Scope<'ast>>
+  )
+    -> Result<BoxExpression<'ast>>
+  {
     let mut expr: BoxExpression<'ast>;
 
     if let Some(prefix) = self.prefix_token_value() {
@@ -636,13 +645,13 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       let precedence = prefix.value().precedence();
       expr = box PrefixExpr::new(
         prefix,
-        self.parse_precedence_expr(precedence)?
+        self.parse_precedence_expr(precedence, scope)?
       );
       if is_paren {
         self.consume(TokenKind::RParen)?;
       }
     } else {
-      expr = self.parse_primary_expr()?;
+      expr = self.parse_primary_expr(scope)?;
     }
 
     loop {
@@ -657,7 +666,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         self.advance()?;
         let list = self.parse_list(
           TokenKind::Comma,
-          Self::parse_expression,
+          |this| this.parse_expression(scope),
           Vec::new(),
           Vec::push,
         )?;
@@ -678,7 +687,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         expr = box BinaryExpr::new(
           binary,
           expr,
-          self.parse_precedence_expr(next_precedence)?
+          self.parse_precedence_expr(next_precedence, scope)?
         );
       } else {
         break;
@@ -688,15 +697,17 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   }
 
   /// primary = ident | amount | literal
-  fn parse_primary_expr(&mut self) -> Result<BoxExpression<'ast>> {
+  fn parse_primary_expr(&mut self, scope: GraphRefMut<'ast, Scope<'ast>>)
+    -> Result<BoxExpression<'ast>>
+  {
     if self.token == TokenMatch::Identifier {
       let tv = self.string_token_value();
       self.advance()?;
-      Ok(box ExprVar::new(tv, self.scope.asleep_ref()))
+      Ok(box ExprVar::new(tv, scope.asleep_ref()))
     } else if self.token == Keyword::Amount {
       let tv = self.string_token_value();
       self.advance()?;
-      Ok(box ExprVar::new(tv, self.scope.asleep_ref()))
+      Ok(box ExprVar::new(tv, scope.asleep_ref()))
     } else if self.token == TokenMatch::Decimal || self.token == TokenMatch::Percentage {
       let tv = self.float_token_value().unwrap();
       self.advance()?;

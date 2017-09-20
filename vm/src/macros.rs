@@ -36,6 +36,41 @@ macro_rules! generic_name_short {
   );
 }
 
+macro_rules! type_macros {
+  (@make $ty:ident($($bounds:tt)+), $m:ident ($($args:tt)*)) => (
+    $m!($($args)* $ty<$($bounds)+>);
+  );
+  (@make $ty:ident(), $m:ident ($($args:tt)*)) => (
+    $m!($($args)* $ty);
+  );
+  (@gen $ty:ident ($($bounds:tt)+) >; $($rest:tt)+) => (
+    type_macros!(@process $ty ($($bounds)+), $($rest)+);
+  );
+  (@gen ty:ident ($($bounds:tt)+) $next:tt $($rest:tt)+) => (
+    type_macros!(@gen $ty ($($bounds)+ $next) $($rest)+);
+  );
+  (@process $ty:ident $bounds:tt, $first:ident ($($args:tt)*) $($rest:tt)*) => (
+    type_macros!(@make $ty $bounds, $first($($args)*));
+    type_macros!(@process $ty $bounds $($rest)*);
+  );
+  (@process $ty:ident $bounds:tt, $m:ident) => (
+    type_macros!(@process $ty $bounds, $m());
+  );
+  (@process $ty:ident $bounds:tt, $first:ident, $($rest:tt)+) => (
+    type_macros!(@process $ty $bounds, $first(), $($rest)+);
+  );
+  (@process $ty:ident $b:tt) => ();
+  ($ty:ident; $($macros:tt)+) => (
+    type_macros!(@process $ty (), $($macros)+);
+  );
+  ($ty:ident< $first:tt $($rest:tt)+) => (
+    type_macros!(@gen $ty ($first) $($rest)+);
+  );
+  ($ty:ident ($($bounds:tt)+); $($rest:tt)+) => (
+    type_macros!(@process $ty ($($bounds)+), $($rest)+);
+  );
+}
+
 /// Implement traits for types that are identified
 /// by a unique name so they can be compared and
 /// be stored and looked up by name in a hash set.
@@ -116,4 +151,22 @@ macro_rules! impl_named {
       }
     }
   );
+}
+
+macro_rules! impl_scoped {
+  ($lifetime:tt, $ty:ident $($bounds:tt)*) => (
+    impl $($bounds)* ::ast::var::Scoped<$lifetime> for generic_name_short!($ty $($bounds)*) {
+      fn scope(&self)
+        -> ::util::graph_cell::GraphRef<$lifetime, ::ast::var::Scope<$lifetime>>
+      {
+        self.scope.asleep()
+      }
+
+      fn scope_mut(&mut self)
+        -> ::util::graph_cell::GraphRefMut<$lifetime, ::ast::var::Scope<$lifetime>>
+      {
+        self.scope.asleep_mut()
+      }
+    }
+  )
 }

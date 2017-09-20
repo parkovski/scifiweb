@@ -97,7 +97,7 @@ impl<'a> SourceItem for DefaultValue<'a> {
 #[derive(Debug)]
 pub struct Scope<'a> {
   vars: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
-  parent: Option<GraphRefMut<'a, Scope<'a>>>,
+  parent: Option<GraphRef<'a, Scope<'a>>>,
 }
 
 impl<'a> Scope<'a> {
@@ -108,23 +108,18 @@ impl<'a> Scope<'a> {
     })
   }
 
-  pub fn child(this: GraphRefMut<'a, Scope<'a>>) -> GraphCell<Self> {
+  pub fn child(this: GraphRef<'a, Scope<'a>>) -> GraphCell<Self> {
     GraphCell::new(Scope {
       vars: Default::default(),
       parent: Some(this),
     })
   }
 
-  pub fn end(&self, current: &mut GraphRefMut<'a, Scope<'a>>) -> Result<()> {
-    if let Some(parent) = self.parent {
-      *current = parent;
-      Ok(())
-    } else {
-      Err(ErrorKind::InvalidOperation("can't end the global scope").into())
-    }
+  pub fn parent(&self) -> Option<GraphRef<'a, Scope<'a>>> {
+    self.parent
   }
 
-  pub fn set_parent(&mut self, parent: GraphRefMut<'a, Scope<'a>>) -> Result<()> {
+  pub fn set_parent(&mut self, parent: GraphRef<'a, Scope<'a>>) -> Result<()> {
     if self.parent.is_some() {
       return Err(ErrorKind::InvalidOperation(
         "can't set parent on scope that already has a parent"
@@ -132,7 +127,7 @@ impl<'a> Scope<'a> {
     }
     let p = parent.awake();
     for (key, value) in &self.vars {
-      if p.has_var(key) {
+      if p.has(key) {
         return Err(ErrorKind::DuplicateDefinition(
           value.awake().name().clone(), "variable"
         ).into());
@@ -141,16 +136,16 @@ impl<'a> Scope<'a> {
     Ok(self.parent = Some(parent))
   }
 
-  pub fn has_var(&self, name: &str) -> bool {
-    self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().has_var(name))
+  pub fn has(&self, name: &str) -> bool {
+    self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().has(name))
   }
 
-  pub fn insert_var(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
+  pub fn insert(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     let error: Error = ErrorKind::DuplicateDefinition(
         var.name().clone(), "variable"
     ).into();
     if let Some(parent) = self.parent {
-      if parent.awake().has_var(&var.name()) {
+      if parent.awake().has(&var.name()) {
         return Err(error);
       }
     }
