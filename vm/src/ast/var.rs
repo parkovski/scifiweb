@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::fmt::{self, Display};
 use fxhash::FxHashMap;
 use serde::ser::{Serialize, Serializer, SerializeStruct};
 use compile::{TokenSpan, TokenValue};
@@ -94,8 +95,31 @@ impl<'a> SourceItem for DefaultValue<'a> {
   }
 }
 
+/// These are in order from most specific to least specific.
+/// Searches need to be able to specify their specificity
+/// when searching recursively through scopes.
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ScopeKind {
+  FnLocal,
+  FnParam,
+  Type,
+  Global,
+}
+
+impl Display for ScopeKind {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str(match *self {
+      ScopeKind::FnLocal => "function local",
+      ScopeKind::FnParam => "function param",
+      ScopeKind::Type => "type",
+      ScopeKind::Global => "global",
+    })
+  }
+}
+
 #[derive(Debug)]
 pub struct Scope<'a> {
+  kind: ScopeKind,
   vars: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
   parent: Option<GraphRef<'a, Scope<'a>>>,
 }
@@ -103,6 +127,7 @@ pub struct Scope<'a> {
 impl<'a> Scope<'a> {
   pub fn new() -> GraphCell<Self> {
     GraphCell::new(Scope {
+      kind: ScopeKind::Global,
       vars: Default::default(),
       parent: None,
     })
@@ -110,6 +135,7 @@ impl<'a> Scope<'a> {
 
   pub fn child(this: GraphRef<'a, Scope<'a>>) -> GraphCell<Self> {
     GraphCell::new(Scope {
+      kind: ScopeKind::Type,
       vars: Default::default(),
       parent: Some(this),
     })

@@ -202,6 +202,7 @@ impl BaseCustomType {
     name: TokenValue<Arc<str>>
   ) -> Result<()>
   {
+    let global_scope = ast.awake().scope();
     match *self {
       BaseCustomType::Array => {
         return Err(ErrorKind::InvalidOperation(
@@ -212,13 +213,13 @@ impl BaseCustomType {
       BaseCustomType::Collectable => {
         Ast::insert_type(
           ast,
-          Collectable::new(name, ast.awake().scope())
+          Collectable::new(name, global_scope)
         )?;
       }
       BaseCustomType::CollectableGroup => {
         Ast::insert_type(
           ast,
-          CollectableGroup::new(name, ast.awake().scope())
+          CollectableGroup::new(name, global_scope)
         )?;
       }
       BaseCustomType::User => { Ast::insert_type(ast, User::new(name))?; }
