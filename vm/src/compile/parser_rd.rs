@@ -79,6 +79,7 @@ impl<'a> TryFrom<TokenKind<'a>> for PrefixOperator {
       TokenKind::LParen => Ok(PrefixOperator::Parens),
       TokenKind::Minus => Ok(PrefixOperator::Neg),
       TokenKind::Exclamation => Ok(PrefixOperator::Not),
+      TokenKind::Dot => Ok(PrefixOperator::Dot),
       _ => Err(()),
     }
   }

@@ -12,6 +12,7 @@ pub enum PrefixOperator {
   Parens,
   Not,
   Neg,
+  Dot,
 }
 
 impl PrefixOperator {
@@ -20,6 +21,7 @@ impl PrefixOperator {
       PrefixOperator::Parens => "(",
       PrefixOperator::Not => "!",
       PrefixOperator::Neg => "-",
+      PrefixOperator::Dot => ".",
     }
   }
 
@@ -34,6 +36,7 @@ impl PrefixOperator {
   pub fn precedence(&self) -> u8 {
     match *self {
       PrefixOperator::Parens => 0,
+      PrefixOperator::Dot => 7,
       _ => 6,
     }
   }
