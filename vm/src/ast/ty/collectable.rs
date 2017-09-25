@@ -24,7 +24,6 @@ pub struct CollectableGroup<'a> {
   name: TokenValue<Arc<str>>,
 
   self_ref: Later<GraphRef<'a, CollectableGroup<'a>>>,
-  ast_ref: Later<GraphRef<'a, Ast<'a>>>,
 
   auto_grouping: AutoGrouping,
 
@@ -44,7 +43,6 @@ impl<'a> CollectableGroup<'a> {
     CollectableGroup {
       name,
       self_ref: Later::new(),
-      ast_ref: Later::new(),
       auto_grouping: AutoGrouping::Inherit,
       parent: None,
       scope: Scope::child(parent_scope),
@@ -108,11 +106,11 @@ impl<'a> SourceItem for CollectableGroup<'a> {
 
   fn resolve(&mut self) -> Result<()> {
     for g in self.sub_groups.values_mut() {
-      let g_ref = g.resolve(&*self.ast_ref.awake())?;
+      let g_ref = g.resolve()?;
       g_ref.awake_mut().set_super_type(*self.self_ref)?;
     }
     for c in self.collectables.values_mut() {
-      let c_ref = c.resolve(&*self.ast_ref.awake())?;
+      let c_ref = c.resolve()?;
       c_ref.awake_mut().set_super_type(*self.self_ref)?;
     }
     Ok(())
@@ -131,11 +129,10 @@ impl<'a> CustomType<'a> for CollectableGroup<'a> {
   fn init_cyclic(
     &mut self,
     self_ref: GraphRef<'a, Self>,
-    ast_ref: GraphRef<'a, Ast<'a>>
+    _ast_ref: GraphRef<'a, Ast<'a>>
   ) where Self: Sized
   {
     self.self_ref.set(self_ref);
-    self.ast_ref.set(ast_ref);
   }
 
   fn base_type(&self) -> BaseCustomType {

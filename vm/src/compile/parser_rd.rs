@@ -323,7 +323,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   fn parse_type(&mut self) -> Result<ItemRef<'ast, Type<'ast>>> {
     if self.token == TokenMatch::Identifier {
-      let item_ref = ItemRef::new(self.string_token_value());
+      let item_ref = ItemRef::new(self.string_token_value(), self.ast.asleep_ref());
       self.advance()?;
       Ok(item_ref)
     } else if self.token == TokenMatch::Keyword {
@@ -492,7 +492,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   ) -> Result<()>
   {
     self.expect(TokenMatch::Identifier)?;
-    group.insert_collectable_ref(ItemRefMut::new(self.string_token_value()))?;
+    group.insert_collectable_ref(ItemRefMut::new(
+      self.string_token_value(),
+      self.ast.asleep_ref()
+    ))?;
     self.advance()?;
     //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
     Ok(())
@@ -504,7 +507,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   ) -> Result<()>
   {
     self.expect(TokenMatch::Identifier)?;
-    group.insert_group_ref(ItemRefMut::new(self.string_token_value()))?;
+    group.insert_group_ref(ItemRefMut::new(
+      self.string_token_value(),
+      self.ast.asleep_ref()
+    ))?;
     self.advance()?;
     Ok(())
   }

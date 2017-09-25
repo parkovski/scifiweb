@@ -57,23 +57,24 @@ impl<'a> SourceItem for Variable<'a> {
 #[derive(Debug, Serialize)]
 pub struct DefaultValue<'a> {
   name: TokenValue<Arc<str>>,
-  scope: GraphRef<'a, Scope<'a>>,
   value: BoxExpression<'a>,
-  var: ItemRef<'a, Variable<'a>>,
+  #[serde(skip)]
+  var: ResolveLater<'a, Variable<'a>, FilteredScope<'a>>,
 }
 
 impl<'a> DefaultValue<'a> {
   pub fn new(
     name: TokenValue<Arc<str>>,
     scope: GraphRef<'a, Scope<'a>>,
-    value: BoxExpression<'a>
+    value: BoxExpression<'a>,
   ) -> Self
   {
+    let scope_range = scope.awake().kind().only();
+    let filtered_scope = FilteredScope::new(scope, scope_range, true);
     DefaultValue {
       name: name.clone(),
       value,
-      scope,
-      var: ItemRef::new(name),
+      var: ResolveLater::Unresolved(filtered_scope),
     }
   }
 }
@@ -95,15 +96,38 @@ impl<'a> SourceItem for DefaultValue<'a> {
   }
 }
 
-/// These are in order from most specific to least specific.
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
+pub struct ScopeKindRange(ScopeKind, ScopeKind);
+
+impl ScopeKindRange {
+  fn contains(&self, kind: ScopeKind) -> bool {
+    kind >= self.0 && kind <= self.1
+  }
+}
+
+/// These are in order from least specific to most specific.
 /// Searches need to be able to specify their specificity
 /// when searching recursively through scopes.
 #[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ScopeKind {
-  FnLocal,
-  FnParam,
-  Type,
   Global,
+  Type,
+  FnParam,
+  FnLocal,
+}
+
+impl ScopeKind {
+  fn all() -> ScopeKindRange {
+    ScopeKindRange(ScopeKind::Global, ScopeKind::FnLocal)
+  }
+
+  fn only(self) -> ScopeKindRange {
+    ScopeKindRange(self, self)
+  }
+
+  fn and_below(self) -> ScopeKindRange {
+    ScopeKindRange(ScopeKind::Global, self)
+  }
 }
 
 impl Display for ScopeKind {
@@ -166,6 +190,39 @@ impl<'a> Scope<'a> {
     self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().has(name))
   }
 
+  pub fn has_filtered(&self, name: &str, range: ScopeKindRange, recursive: bool) -> bool {
+    if range.contains(self.kind) && self.vars.contains_key(name) {
+      true
+    } else if recursive {
+      self.parent.map_or(false, |p| p.awake().has_filtered(name, range, true))
+    } else {
+      false
+    }
+  }
+
+  pub fn find_filtered_mut(&self, name: &str, range: ScopeKindRange, recursive: bool)
+    -> Option<GraphRefMut<'a, Variable<'a>>>
+  {
+    if range.contains(self.kind) {
+      if let Some(v) = self.vars.get(name) {
+        return Some(v.asleep_mut());
+      }
+    }
+    if recursive {
+      self.parent
+        .map(|p| p.awake().find_filtered_mut(name, range, true))
+        .unwrap_or(None)
+    } else {
+      None
+    }
+  }
+
+  pub fn find_filtered(&self, name: &str, range: ScopeKindRange, recursive: bool)
+    -> Option<GraphRef<'a, Variable<'a>>>
+  {
+    self.find_filtered_mut(name, range, recursive).map(|v| v.asleep_ref())
+  }
+
   pub fn insert(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
     let error: Error = ErrorKind::DuplicateDefinition(
         var.name().clone(), "variable"
@@ -178,6 +235,10 @@ impl<'a> Scope<'a> {
     self.vars
       .insert_graph_cell(var.name().value().clone(), var)
       .map_err(move |_| error)
+  }
+
+  fn kind(&self) -> ScopeKind {
+    self.kind
   }
 
   fn level(&self) -> u32 {
@@ -210,4 +271,32 @@ impl<'a> Serialize for Scope<'a> {
 pub trait Scoped<'a> {
   fn scope(&self) -> GraphRef<'a, Scope<'a>>;
   fn scope_mut(&mut self) -> GraphRefMut<'a, Scope<'a>>;
+}
+
+#[derive(Debug, Serialize)]
+pub struct FilteredScope<'a> {
+  scope: GraphRef<'a, Scope<'a>>,
+  range: ScopeKindRange,
+  recursive: bool,
+}
+
+impl<'a> FilteredScope<'a> {
+  pub fn new(
+    scope: GraphRef<'a, Scope<'a>>,
+    range: ScopeKindRange,
+    recursive: bool,
+  ) -> Self
+  {
+    FilteredScope { scope, range, recursive }
+  }
+
+  pub fn to_inner(&self) -> GraphRef<'a, Scope<'a>> {
+    self.scope
+  }
+}
+
+impl<'a> Owner<'a, Variable<'a>> for FilteredScope<'a> {
+  fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
+    self.scope.awake().find_filtered_mut(name, self.range, self.recursive)
+  }
 }

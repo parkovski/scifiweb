@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::default::Default;
-use std::fmt::{Debug, Display};
+use std::fmt::{self, Debug, Display};
 use std::path::{Path, PathBuf};
 use fxhash::FxHashMap;
 use util::{SharedStrings, InsertGraphCell};
@@ -49,54 +49,83 @@ pub trait Owner<'a, T: Named + 'a> {
   }
 }
 
+impl<'a, T: Named + 'a> Debug for Owner<'a, T> + 'a {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.write_str("Owner")
+  }
+}
+
 // =====
 
-#[derive(Debug, Serialize)]
-pub struct ItemRef<'a, T: Named + 'a> {
-  name: TokenValue<Arc<str>>,
-  item: Option<GraphRef<'a, T>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ItemRefMut<'a, T: Named + 'a> {
-  name: TokenValue<Arc<str>>,
-  item: Option<GraphRefMut<'a, T>>,
-}
-
 macro_rules! item_ref_impls {
-  ($t:ident, $graph_ref:ident, $find:ident) => (
+  ($t:ident, $res_later:ident, $graph_ref:ident, $find:ident) => (
+
+    #[derive(Debug)]
+    enum $res_later<'a, T: Debug + 'a, O: Debug + 'a> {
+      Unresolved(O),
+      Resolved($graph_ref<'a, T>),
+    }
+
+    impl<'a, T: Debug + 'a, O: Debug + 'a> $res_later<'a, T, O> {
+      fn resolve<F>(&mut self, find: F, name: &TokenValue<Arc<str>>)
+        -> Result<$graph_ref<'a, T>>
+      where F: FnOnce(&O, &str) -> Option<$graph_ref<'a, T>>
+      {
+        let item = match *self {
+          $res_later::Resolved(item) => return Ok(item),
+          $res_later::Unresolved(ref owner) => {
+            let item = find(owner, name.value());
+            match item {
+              Some(r) => r,
+              None => return Err(ErrorKind::NotDefined(
+                name.clone(),
+                "item"
+              ).into()),
+            }
+          }
+        };
+
+        *self = $res_later::Resolved(item.clone());
+        Ok(item)
+      }
+
+      fn unwrap(&self) -> $graph_ref<'a, T> {
+        match *self {
+          $res_later::Resolved(item) => item,
+          _ => panic!("Unwrap called on unresolved RefItem"),
+        }
+      }
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct $t<'a, T: Named + 'a> {
+      name: TokenValue<Arc<str>>,
+      #[serde(skip)]
+      item: $res_later<'a, T, GraphRef<'a, Owner<'a, T>>>,
+    }
+
     impl<'a, T: Named + 'a> $t<'a, T> {
-      pub fn new(name: TokenValue<Arc<str>>) -> Self {
+      pub fn new<O: Owner<'a, T> + 'a>(
+        name: TokenValue<Arc<str>>,
+        owner: GraphRef<'a, O>
+      ) -> Self
+      {
         $t {
           name,
-          item: None,
+          item: $res_later::Unresolved(owner),
         }
       }
 
       pub fn with_item(name: TokenValue<Arc<str>>, item: $graph_ref<'a, T>) -> Self {
         $t {
           name,
-          item: Some(item),
+          item: $res_later::Resolved(item),
         }
       }
 
-      pub fn resolve<O>(&mut self, owner: &O) -> Result<$graph_ref<'a, T>>
-      where O: Owner<'a, T>
-      {
-        if let Some(ref item) = self.item {
-          return Ok(item.clone());
-        }
-
-        match owner.$find(&self.name) {
-          Some(r) => {
-            self.item = Some(r.clone());
-            Ok(r)
-          }
-          None => Err(ErrorKind::NotDefined(
-            self.name.clone(),
-            "item"
-          ).into()),
-        }
+      pub fn resolve(&mut self) -> Result<$graph_ref<'a, T>> {
+        let name = self.name.clone();
+        self.item.resolve(|owner, name| owner.awake().$find(name), &name)
       }
     }
 
@@ -110,28 +139,30 @@ macro_rules! item_ref_impls {
   );
 }
 
-item_ref_impls!(ItemRef, GraphRef, find);
-item_ref_impls!(ItemRefMut, GraphRefMut, find_mut);
+item_ref_impls!(ItemRef, ResolveLater, GraphRef, find);
+item_ref_impls!(ItemRefMut, ResolveLaterMut, GraphRefMut, find_mut);
 
 impl<'a, T: Named + 'a> ItemRef<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
-    self.item
+    match self.item {
+      ResolveLater::Resolved(item) => Some(item),
+      ResolveLater::Unresolved(_) => None,
+    }
   }
 }
 
 impl<'a, T: Named + 'a> ItemRefMut<'a, T> {
   pub fn item(&self) -> Option<GraphRef<'a, T>> {
-    self.item.map(|r| r.asleep_ref())
+    match self.item {
+      ResolveLaterMut::Resolved(item) => Some(item.asleep_ref()),
+      ResolveLaterMut::Unresolved(_) => None,
+    }
   }
 
   pub fn item_mut(&mut self) -> Option<GraphRefMut<'a, T>> {
-    self.item
-  }
-
-  pub fn into_item_ref(self) -> ItemRef<'a, T> {
-    ItemRef {
-      name: self.name,
-      item: self.item.map(|i| i.asleep_ref()),
+    match self.item {
+      ResolveLaterMut::Resolved(item) => Some(item),
+      ResolveLaterMut::Unresolved(_) => None,
     }
   }
 }
@@ -256,7 +287,7 @@ impl<'a> Ast<'a> {
       array
     } else {
       let tv = TokenValue::new(str_name, TokenSpan::new(this.awake().internal_path.clone()));
-      let ty = name.type_name.map(|n| ItemRef::new(n.clone()));
+      let ty = name.type_name.map(|n| ItemRef::new(n.clone(), this.asleep_ref()));
       let array = Array::new(tv, ty, name.length);
       Self::insert_type(this, array).unwrap().asleep_ref()
     }
