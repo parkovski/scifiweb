@@ -162,7 +162,7 @@ macro_rules! impl_scoped {
         self.scope.asleep()
       }
 
-      fn scope_mut(&mut self)
+      fn scope_mut(&self)
         -> ::util::graph_cell::GraphRefMut<$lifetime, ::ast::var::Scope<$lifetime>>
       {
         self.scope.asleep_mut()

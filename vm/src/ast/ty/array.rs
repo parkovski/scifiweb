@@ -32,29 +32,39 @@ impl Display for ArrayName {
 pub struct Array<'a> {
   name: TokenValue<Arc<str>>,
   ty: Option<ItemRef<'a, Type<'a>>>,
-  /// This can't be usize because we don't know what hardware this will need
-  /// to be shared with. Also, given what this system is, if you want
-  /// a bigger array, you're wrong.
+  /// TODO: asynchronously loaded big arrays?
   max_length: Option<u32>,
+  scope: GraphCell<Scope<'a>>,
 }
-
-impl_named!(type Array<'a>);
-impl_name_traits!(Array<'a>);
-named_display!(Array<'a>);
 
 impl<'a> Array<'a> {
   pub fn new(
     name: TokenValue<Arc<str>>,
     ty: Option<ItemRef<'a, Type<'a>>>,
     max_length: Option<u32>,
+    parent_scope: GraphRef<'a, Scope<'a>>,
   ) -> Self
   {
-    Array { name, ty, max_length }
+    let span = name.span().clone();
+    Array {
+      name,
+      ty,
+      max_length,
+      scope: Scope::child(parent_scope, span)
+    }
   }
 }
 
-impl<'a> SourceItem for Array<'a> {
+type_macros!(
+  Array<'a>;
 
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
+
+impl<'a> SourceItem for Array<'a> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }

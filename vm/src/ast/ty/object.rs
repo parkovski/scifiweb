@@ -1,47 +1,39 @@
 use std::sync::Arc;
-use fxhash::FxHashMap;
 use util::graph_cell::*;
-use util::InsertGraphCell;
 use compile::{TokenSpan, TokenValue};
-use ast::var::Variable;
+use ast::var::*;
 use super::*;
 
 #[derive(Debug, Serialize)]
 pub struct Object<'a> {
   name: TokenValue<Arc<str>>,
   dynamic: bool,
-  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
-  super_type: Option<ItemRef<'a, Object<'a>>>,
+  scope: GraphCell<Scope<'a>>,
+  super_type: Option<GraphRef<'a, Object<'a>>>,
 }
 
-impl_named!(type Object<'a>);
-impl_name_traits!(Object<'a>);
-named_display!(Object<'a>);
-
 impl<'a> Object<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>)
+    -> Self
+  {
+    let span = name.span().clone();
     Object {
       name,
       dynamic: false,
-      properties: Default::default(),
+      scope: Scope::child(parent_scope, span),
       super_type: None,
     }
   }
-
-  fn insert_property(&mut self, p: Variable<'a>) -> Result<()> {
-    let gr = self.properties
-      .insert_graph_cell(p.name().value().clone(), p);
-    match gr {
-      Ok(_) => Ok(()),
-      Err(p) => Err(
-        ErrorKind::DuplicateDefinition(
-          p.name().clone(),
-          "property"
-        ).into()
-      )
-    }
-  }
 }
+
+type_macros!(
+  Object<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for Object<'a> {
   fn span(&self) -> &TokenSpan {
@@ -49,7 +41,7 @@ impl<'a> SourceItem for Object<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    Ok(())
+    self.scope.awake_mut().resolve()
   }
 
   fn typecheck(&mut self) -> Result<()> {
@@ -70,8 +62,8 @@ impl<'a> CustomType<'a> for Object<'a> {
     TC_PROPERTIES | TC_OWNED | TC_INHERIT
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
-    self.properties.get(name).map(|p| p.asleep())
+  fn property(&self, _name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
+    None
   }
 
   fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
@@ -81,10 +73,10 @@ impl<'a> CustomType<'a> for Object<'a> {
 
 impl<'a> SubType<'a, Object<'a>> for Object<'a> {
   fn super_type(&self) -> Option<GraphRef<'a, Object<'a>>> {
-    None
+    self.super_type
   }
 
   fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, Object<'a>>) {
-    //
+    self.super_type = Some(super_type);
   }
 }

@@ -49,6 +49,7 @@ impl<'a> Default for Precedence<'a> {
 #[derive(Debug, Serialize)]
 pub struct UserGroup<'a> {
   name: TokenValue<Arc<str>>,
+  scope: GraphCell<Scope<'a>>,
   /// Whether to allow or deny membership by default.
   membership_mode: MembershipMode,
   /// User types to allow to join this group when in `Deny` mode,
@@ -60,14 +61,21 @@ pub struct UserGroup<'a> {
   precedence: Precedence<'a>,
 }
 
-impl_named!(type UserGroup<'a>);
-impl_name_traits!(UserGroup<'a>);
-named_display!(UserGroup<'a>);
+type_macros!(
+  UserGroup<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> UserGroup<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let span = name.span().clone();
     UserGroup {
       name,
+      scope: Scope::child(parent_scope, span),
       membership_mode: Default::default(),
       except_members: Vec::new(),
       deny_with: Vec::new(),
@@ -115,17 +123,28 @@ impl<'a> CustomType<'a> for UserGroup<'a> {
 pub struct User<'a> {
   name: TokenValue<Arc<str>>,
   properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
+  scope: GraphCell<Scope<'a>>,
 }
-
-impl_named!(type User<'a>);
-impl_name_traits!(User<'a>);
-named_display!(User<'a>);
 
 impl<'a> User<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
-    User { name, properties: Default::default() }
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let span = name.span().clone();
+    User {
+      name,
+      properties: Default::default(),
+      scope: Scope::child(parent_scope, span),
+    }
   }
 }
+
+type_macros!(
+  User<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for User<'a> {
   fn span(&self) -> &TokenSpan {

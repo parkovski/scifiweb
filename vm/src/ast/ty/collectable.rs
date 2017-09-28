@@ -40,12 +40,13 @@ pub struct CollectableGroup<'a> {
 
 impl<'a> CollectableGroup<'a> {
   pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let span = name.span().clone();
     CollectableGroup {
       name,
       self_ref: Later::new(),
       auto_grouping: AutoGrouping::Inherit,
       parent: None,
-      scope: Scope::child(parent_scope),
+      scope: Scope::child(parent_scope, span),
       collectables: Default::default(),
       sub_groups: Default::default(),
       upgrades: None,
@@ -106,12 +107,14 @@ impl<'a> SourceItem for CollectableGroup<'a> {
 
   fn resolve(&mut self) -> Result<()> {
     for g in self.sub_groups.values_mut() {
-      let g_ref = g.resolve()?;
-      g_ref.awake_mut().set_super_type(*self.self_ref)?;
+      g.resolve()?;
+      let g = g.unwrap();
+      g.awake_mut().set_super_type(*self.self_ref)?;
     }
     for c in self.collectables.values_mut() {
-      let c_ref = c.resolve()?;
-      c_ref.awake_mut().set_super_type(*self.self_ref)?;
+      c.resolve()?;
+      let c = c.unwrap();
+      c.awake_mut().set_super_type(*self.self_ref)?;
     }
     Ok(())
   }
@@ -179,11 +182,12 @@ impl<'a> Collectable<'a> {
   )
     -> Self
   {
+    let span = name.span().clone();
     Collectable {
       name,
       parent: None,
       auto_grouping: AutoGrouping::Inherit,
-      scope: Scope::child(parent_scope),
+      scope: Scope::child(parent_scope, span),
       upgrades: None,
       redemptions: None,
     }
@@ -221,7 +225,7 @@ impl<'a> SourceItem for Collectable<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    Ok(())
+    self.scope.awake_mut().resolve()
   }
 
   fn typecheck(&mut self) -> Result<()> {

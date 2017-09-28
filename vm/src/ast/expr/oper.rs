@@ -4,6 +4,7 @@ use util::graph_cell::GraphRef;
 use compile::{TokenValue, TokenSpan};
 use ast::{SourceItem, ItemRef};
 use ast::ty::Type;
+use ast::var::{ScopeFilter, Scoped};
 use ast::errors::*;
 use super::{Expression, BoxExpression};
 
@@ -203,7 +204,7 @@ impl<'a> SourceItem for PrefixExpr<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    Ok(())
+    self.subexpr.resolve()
   }
 
   fn typecheck(&mut self) -> Result<()> {
@@ -260,8 +261,22 @@ impl<'a> SourceItem for BinaryExpr<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    //self.left.resolve()
-    Ok(())
+    self.left.resolve()?;
+    // Special case: the '.' operator makes the right side look at the scope
+    // of the left.
+    if *self.operator.value() == BinaryOperator::Dot {
+      let ty = self.left.ty();
+      let scope = ty.awake().scope();
+      let range = scope.awake().kind().only();
+      let filter = ScopeFilter::new(scope, range, true);
+      if !self.right.set_scope_filter(filter) {
+        return Err(ErrorKind::InvalidExpression(
+          self.right.to_string(),
+          self.right.span().clone(),
+        ).into());
+      }
+    }
+    self.right.resolve()
   }
 
   fn typecheck(&mut self) -> Result<()> {
@@ -325,6 +340,10 @@ impl<'a> SourceItem for PostfixListExpr<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
+    self.left.resolve()?;
+    for e in &mut self.right {
+      e.resolve()?;
+    }
     Ok(())
   }
 

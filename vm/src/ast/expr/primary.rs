@@ -134,7 +134,10 @@ impl<'a> SourceItem for ExprVar<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    Ok(())
+    match self.scope.awake().find(&self.name) {
+      Some(v) => Ok(self.var.set(v)),
+      None => Err(ErrorKind::NotDefined(self.name.clone(), "variable").into()),
+    }
   }
 
   fn typecheck(&mut self) -> Result<()> {

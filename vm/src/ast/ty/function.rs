@@ -8,21 +8,28 @@ use super::*;
 pub struct Function<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,
-  //scope: GraphCell<Scope>,
+  scope: GraphCell<Scope<'a>>,
 }
 
-impl_named!(type Function<'a>);
-impl_name_traits!(Function<'a>);
-named_display!(Function<'a>);
-
 impl<'a> Function<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let span = name.span().clone();
     Function {
       name,
       params: Vec::new(),
+      scope: Scope::child(parent_scope, span),
     }
   }
 }
+
+type_macros!(
+  Function<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for Function<'a> {
   fn span(&self) -> &TokenSpan {
@@ -56,20 +63,28 @@ impl<'a> CustomType<'a> for Function<'a> {
 pub struct RemoteFunction<'a> {
   name: TokenValue<Arc<str>>,
   params: Vec<GraphCell<Variable<'a>>>,
+  scope: GraphCell<Scope<'a>>,
 }
 
-impl_named!(type RemoteFunction<'a>);
-impl_name_traits!(RemoteFunction<'a>);
-named_display!(RemoteFunction<'a>);
-
 impl<'a> RemoteFunction<'a> {
-  pub fn new(name: TokenValue<Arc<str>>) -> Self {
+  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let span = name.span().clone();
     RemoteFunction {
       name,
       params: Vec::new(),
+      scope: Scope::child(parent_scope, span),
     }
   }
 }
+
+type_macros!(
+  RemoteFunction<'a>;
+
+  impl_named(type),
+  impl_name_traits,
+  named_display,
+  impl_scoped('a,)
+);
 
 impl<'a> SourceItem for RemoteFunction<'a> {
   fn span(&self) -> &TokenSpan {

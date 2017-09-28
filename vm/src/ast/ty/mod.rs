@@ -4,8 +4,9 @@ use std::iter::Iterator;
 use serde::ser::{Serialize, Serializer};
 use erased_serde::Serialize as ErasedSerialize;
 use util::graph_cell::*;
+use util::cast::*;
 use compile::{TokenValue, TokenSpan};
-use super::var::Variable;
+use super::var::*;
 use super::errors::*;
 use super::*;
 
@@ -83,6 +84,12 @@ impl PrimitiveType {
     }
 
     PrimitiveTypeIter { next: Some(PrimitiveType::Void) }
+  }
+
+  pub fn make_scope<'a>(&self, global: GraphRef<'a, Scope<'a>>, span: TokenSpan)
+    -> GraphCell<Scope<'a>>
+  {
+    Scope::child(global, span)
   }
 }
 
@@ -209,7 +216,12 @@ impl BaseCustomType {
           "empty custom array type is not valid - use PrimitiveType::Array"
         ).into());
       }
-      BaseCustomType::Object => { Ast::insert_type(ast, Object::new(name))?; }
+      BaseCustomType::Object => {
+        Ast::insert_type(
+          ast,
+          Object::new(name, global_scope)
+        )?;
+      }
       BaseCustomType::Collectable => {
         Ast::insert_type(
           ast,
@@ -222,12 +234,42 @@ impl BaseCustomType {
           CollectableGroup::new(name, global_scope)
         )?;
       }
-      BaseCustomType::User => { Ast::insert_type(ast, User::new(name))?; }
-      BaseCustomType::UserGroup => { Ast::insert_type(ast, UserGroup::new(name))?; }
-      BaseCustomType::Event => { Ast::insert_type(ast, Event::new(name))?; }
-      BaseCustomType::RemoteEvent => { Ast::insert_type(ast, RemoteEvent::new(name))?; }
-      BaseCustomType::Function => { Ast::insert_type(ast, Function::new(name))?; }
-      BaseCustomType::RemoteFunction => { Ast::insert_type(ast, RemoteFunction::new(name))?; }
+      BaseCustomType::User => {
+        Ast::insert_type(
+          ast,
+          User::new(name, global_scope)
+        )?;
+      }
+      BaseCustomType::UserGroup => {
+        Ast::insert_type(
+          ast,
+          UserGroup::new(name, global_scope)
+        )?;
+      }
+      BaseCustomType::Event => {
+        Ast::insert_type(
+          ast,
+          Event::new(name, global_scope)
+        )?;
+      }
+      BaseCustomType::RemoteEvent => {
+        Ast::insert_type(
+          ast,
+          RemoteEvent::new(name, global_scope)
+        )?;
+      }
+      BaseCustomType::Function => {
+        Ast::insert_type(
+          ast,
+          Function::new(name, global_scope)
+        )?;
+      }
+      BaseCustomType::RemoteFunction => {
+        Ast::insert_type(
+          ast,
+          RemoteFunction::new(name, global_scope)
+        )?;
+      }
     }
     Ok(())
   }
@@ -268,6 +310,7 @@ pub trait CustomType<'a>
   + Display
   + CustomTypeAsSerialize
   + Named
+  + Scoped<'a>
   + SourceItem
   + 'a
 {
@@ -362,7 +405,7 @@ pub trait SubType<'a, T: CustomType<'a>>: CustomType<'a> {
 
 #[derive(Debug)]
 pub enum Type<'a> {
-  Primitive(PrimitiveType, TokenValue<Arc<str>>),
+  Primitive(PrimitiveType, TokenValue<Arc<str>>, GraphCell<Scope<'a>>),
   Custom(Box<CustomType<'a> + 'a>),
 }
 
@@ -373,7 +416,7 @@ impl<'a> Type<'a> {
 
   pub fn as_primitive(&self) -> Option<PrimitiveType> {
     match *self {
-      Type::Primitive(t, _) => Some(t),
+      Type::Primitive(t, ..) => Some(t),
       Type::Custom(_) => None,
     }
   }
@@ -384,14 +427,14 @@ impl<'a> Type<'a> {
 
   pub fn as_custom(&self) -> Option<&CustomType<'a>> {
     match *self {
-      Type::Primitive(_, _) => None,
+      Type::Primitive(..) => None,
       Type::Custom(ref t) => Some(t.as_ref()),
     }
   }
 
   pub fn as_custom_mut(&mut self) -> Option<&mut CustomType<'a>> {
     match *self {
-      Type::Primitive(_, _) => None,
+      Type::Primitive(..) => None,
       Type::Custom(ref mut t) => Some(t.as_mut()),
     }
   }
@@ -400,14 +443,14 @@ impl<'a> Type<'a> {
 impl<'a> Named for Type<'a> {
   fn name(&self) -> &TokenValue<Arc<str>> {
     match *self {
-      Type::Primitive(_, ref name) => name,
+      Type::Primitive(_, ref name, _) => name,
       Type::Custom(ref ty) => ty.name(),
     }
   }
 
   fn item_name(&self) -> &'static str {
     match *self {
-      Type::Primitive(ty, _) => ty.as_str(),
+      Type::Primitive(ty, ..) => ty.as_str(),
       Type::Custom(ref ty) => ty.item_name(),
     }
   }
@@ -419,21 +462,21 @@ named_display!(Type<'a>);
 impl<'a> SourceItem for Type<'a> {
   fn span(&self) -> &TokenSpan {
     match *self {
-      Type::Primitive(_, ref name) => name.span(),
+      Type::Primitive(_, ref name, _) => name.span(),
       Type::Custom(ref ty) => ty.span(),
     }
   }
 
   fn resolve(&mut self) -> Result<()> {
     match *self {
-      Type::Primitive(_, _) => Ok(()),
+      Type::Primitive(..) => Ok(()),
       Type::Custom(ref mut ty) => ty.resolve(),
     }
   }
 
   fn typecheck(&mut self) -> Result<()> {
     match *self {
-      Type::Primitive(_, _) => Ok(()),
+      Type::Primitive(..) => Ok(()),
       Type::Custom(ref mut ty) => ty.typecheck(),
     }
   }
@@ -444,12 +487,21 @@ impl<'a> Serialize for Type<'a> {
     -> ::std::result::Result<S::Ok, S::Error>
   {
     match *self {
-      Type::Primitive(ref t, _) => {
+      Type::Primitive(ref t, ..) => {
         serializer.serialize_newtype_variant("Type", 0, "Primitive", t)
       }
       Type::Custom(ref t) => {
         serializer.serialize_newtype_variant("Type", 1, "Custom", t)
       }
+    }
+  }
+}
+
+impl<'a> Scoped<'a> for Type<'a> {
+  fn scope_mut(&self) -> GraphRefMut<'a, Scope<'a>> {
+    match *self {
+      Type::Primitive(.., ref scope) => scope.asleep_mut(),
+      Type::Custom(ref custom) => custom.scope_mut(),
     }
   }
 }

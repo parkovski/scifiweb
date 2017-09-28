@@ -1,6 +1,6 @@
 collectable group Card:
   has amount;
-  property level integer = 1 + `x = y or a.b[0, 1, -2]().c * a - !b;
+  property level integer = 0;
   has collectable group [CommonCard, RareCard];
 end;
 

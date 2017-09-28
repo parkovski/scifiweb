@@ -1,7 +1,7 @@
 #include 'commonCards.scifi';
 #include 'rareCards.scifi';
 
-Player user:
+user Player:
   has collectable Level with amount range 1 to 10;
   has collectable Coin;
   has collectable Gem;
@@ -12,7 +12,7 @@ Player user:
   has collectable group Chest with amount max 4;
 end;
 
-Level collectable:
+collectable Level:
   has amount;
   has upgrades with cost [
     Coin x 100 * 2 ^ (amount - 1) for amount max 4,
@@ -21,7 +21,7 @@ Level collectable:
   ];
 end;
 
-Coin collectable:
+collectable Coin:
   has amount;
   has redemptions with amount [
     100 for cost Gem x 10,
@@ -30,11 +30,11 @@ Coin collectable:
   ];
 end;
 
-CoinRewards function(player Player) -> integer:
+function CoinRewards(player Player) -> integer:
   -> 10 + 2 * player.Level.amount;
 end;
 
-Foobar object:
+object Foobar:
   property test of Foo
   for collectable Bar
   with [
@@ -44,14 +44,14 @@ Foobar object:
   or = 'I don''t know';
 end;
 
-Gem collectable:
+collectable Gem:
   # These redemptions are defined by an adapter
   # that looks up the cost in the store the user
   # is logged in to.
   has redemptions for currency;
 end;
 
-Chest collectable group:
+collectable group Chest:
   property waitingToOpen switch = off;
   has collectable [
     SmallChest:
@@ -61,7 +61,7 @@ Chest collectable group:
   ];
 end;
 
-OpenSmallChest event(chest SmallChest) <- Player:
+event OpenSmallChest(chest SmallChest) <- Player:
   authorize chest.owner;
   assert !chest.waitingToOpen;
   set chest.waitingToOpen = on;
@@ -74,7 +74,7 @@ OpenSmallChest event(chest SmallChest) <- Player:
   award -chest;
 end;
 
-OpenLargeChest event:
+event OpenLargeChest:
   params(chest collectable LargeChest);
   authorize user chest.owner;
   assert !chest.waitingToOpen;
@@ -88,7 +88,7 @@ OpenLargeChest event:
   award -chest;
 end;
 
-SmallChestRewards random:
+random SmallChestRewards:
   group distribution min 2 max 4;
   amount random range 10 to 15;
   weighted for collectable group [
@@ -99,7 +99,7 @@ SmallChestRewards random:
   ];
 end;
 
-LargeChestRewards random:
+random LargeChestRewards:
   group distribution min 4 max 7;
   amount random range 30 to 35;
   weighted for collectable group [
@@ -110,7 +110,7 @@ LargeChestRewards random:
   ];
 end;
 
-WinnerChest random:
+random WinnerChest:
   amount 1;
   weighted for collectable [
     70% for SmallChest,
@@ -118,7 +118,7 @@ WinnerChest random:
   ];
 end;
 
-PlayerWantsGame event:
+event PlayerWantsGame:
   params(player user Player);
   authorize user;
   # TODO: How to model these to avoid race conditions?
@@ -133,15 +133,15 @@ PlayerWantsGame event:
   );
 end;
 
-StartGame event for gameserver:
+event for gameserver StartGame:
   params(p1 user Player, p2 user Player);
 end;
 
-StartComputerPlayerGame event for gameserver:
+event for gameserver StartComputerPlayerGame:
   params(player user Player);
 end;
 
-EndGame event:
+event EndGame:
   params(game gameresult);
   authorize gameserver;
   award random WinnerChest to game.winners;

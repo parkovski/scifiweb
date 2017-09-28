@@ -11,6 +11,7 @@ extern crate fxhash;
 extern crate chrono;
 extern crate serde;
 
+pub mod cast;
 pub mod future;
 pub mod graph_cell;
 pub mod later;

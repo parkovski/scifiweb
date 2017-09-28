@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::default::Default;
 use std::fmt::{self, Debug, Display};
 use std::path::{Path, PathBuf};
+use serde::ser::{Serialize, Serializer};
 use fxhash::FxHashMap;
 use util::{SharedStrings, InsertGraphCell};
 use util::graph_cell::*;
@@ -68,11 +69,11 @@ macro_rules! item_ref_impls {
 
     impl<'a, T: Debug + 'a, O: Debug + 'a> $res_later<'a, T, O> {
       fn resolve<F>(&mut self, find: F, name: &TokenValue<Arc<str>>)
-        -> Result<$graph_ref<'a, T>>
+        -> Result<()>
       where F: FnOnce(&O, &str) -> Option<$graph_ref<'a, T>>
       {
         let item = match *self {
-          $res_later::Resolved(item) => return Ok(item),
+          $res_later::Resolved(_) => return Ok(()),
           $res_later::Unresolved(ref owner) => {
             let item = find(owner, name.value());
             match item {
@@ -86,13 +87,26 @@ macro_rules! item_ref_impls {
         };
 
         *self = $res_later::Resolved(item.clone());
-        Ok(item)
+        Ok(())
       }
 
       fn unwrap(&self) -> $graph_ref<'a, T> {
         match *self {
           $res_later::Resolved(item) => item,
-          _ => panic!("Unwrap called on unresolved RefItem"),
+          _ => panic!("Unwrap called on unresolved ResolveLater"),
+        }
+      }
+    }
+
+    impl<'a, T: Debug + 'a, O: Debug + 'a> Serialize for $res_later<'a, T, O> {
+      fn serialize<S: Serializer>(&self, serializer: S)
+        -> ::std::result::Result<S::Ok, S::Error>
+      {
+        match *self {
+          $res_later::Unresolved(ref o)
+            => serializer.serialize_str(&format!("Unresolved({:?})", o)),
+          $res_later::Resolved(ref t)
+            => serializer.serialize_str(&format!("Resolved({:?})", t)),
         }
       }
     }
@@ -100,7 +114,6 @@ macro_rules! item_ref_impls {
     #[derive(Debug, Serialize)]
     pub struct $t<'a, T: Named + 'a> {
       name: TokenValue<Arc<str>>,
-      #[serde(skip)]
       item: $res_later<'a, T, GraphRef<'a, Owner<'a, T>>>,
     }
 
@@ -123,7 +136,7 @@ macro_rules! item_ref_impls {
         }
       }
 
-      pub fn resolve(&mut self) -> Result<$graph_ref<'a, T>> {
+      pub fn resolve(&mut self) -> Result<()> {
         let name = self.name.clone();
         self.item.resolve(|owner, name| owner.awake().$find(name), &name)
       }
@@ -149,6 +162,10 @@ impl<'a, T: Named + 'a> ItemRef<'a, T> {
       ResolveLater::Unresolved(_) => None,
     }
   }
+
+  pub fn unwrap(&self) -> GraphRef<'a, T> {
+    self.item().unwrap()
+  }
 }
 
 impl<'a, T: Named + 'a> ItemRefMut<'a, T> {
@@ -159,11 +176,15 @@ impl<'a, T: Named + 'a> ItemRefMut<'a, T> {
     }
   }
 
-  pub fn item_mut(&mut self) -> Option<GraphRefMut<'a, T>> {
+  pub fn item_mut(&self) -> Option<GraphRefMut<'a, T>> {
     match self.item {
       ResolveLaterMut::Resolved(item) => Some(item),
       ResolveLaterMut::Unresolved(_) => None,
     }
+  }
+
+  pub fn unwrap(&self) -> GraphRefMut<'a, T> {
+    self.item_mut().unwrap()
   }
 }
 
@@ -189,7 +210,7 @@ impl<'a> Ast<'a> {
       types: Default::default(),
       primitive_types: Later::new(),
       array_names: Default::default(),
-      scope: Scope::new(),
+      scope: Scope::new(TokenSpan::new(Arc::new(Path::new("(global)").into()))),
       strings: SharedStrings::new(),
       internal_path: Arc::new(Path::new("(internal)").into()),
     });
@@ -199,7 +220,8 @@ impl<'a> Ast<'a> {
       for pt in PrimitiveType::iter() {
         let name = ast_ref.shared_string(pt.as_str());
         let tkval = TokenValue::new(name.clone(), pt_span.clone());
-        let ty = Type::Primitive(pt, tkval);
+        let scope = pt.make_scope(ast_ref.scope.asleep(), pt_span.clone());
+        let ty = Type::Primitive(pt, tkval, scope);
         ast_ref.types.insert(name, GraphCell::new(ty));
       }
       let primitive_types = PrimitiveTypeSet::new(&ast_ref.types);
@@ -222,7 +244,7 @@ impl<'a> Ast<'a> {
     for ty in self.types.values() {
       (step)(&mut *ty.awake_mut())?;
     }
-    Ok(())
+    (step)(&mut *self.scope.awake_mut())
   }
 
   pub fn typecheck(&self) -> Result<()> {
@@ -288,7 +310,7 @@ impl<'a> Ast<'a> {
     } else {
       let tv = TokenValue::new(str_name, TokenSpan::new(this.awake().internal_path.clone()));
       let ty = name.type_name.map(|n| ItemRef::new(n.clone(), this.asleep_ref()));
-      let array = Array::new(tv, ty, name.length);
+      let array = Array::new(tv, ty, name.length, this.awake().scope());
       Self::insert_type(this, array).unwrap().asleep_ref()
     }
   }
@@ -389,6 +411,11 @@ mod errors {
           conflicting_parent.value(),
           &parent
         )
+      }
+
+      InvalidExpression(expr: String, span: TokenSpan) {
+        description("invalid expression")
+        display("{}: invalid expression '{}'", &span, &expr)
       }
 
       ValueOutOfRange(value: String, reason: &'static str, location: TokenSpan) {

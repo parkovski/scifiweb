@@ -59,7 +59,7 @@ pub struct DefaultValue<'a> {
   name: TokenValue<Arc<str>>,
   value: BoxExpression<'a>,
   #[serde(skip)]
-  var: ResolveLater<'a, Variable<'a>, FilteredScope<'a>>,
+  var: ResolveLater<'a, Variable<'a>, ScopeFilter<'a>>,
 }
 
 impl<'a> DefaultValue<'a> {
@@ -70,7 +70,7 @@ impl<'a> DefaultValue<'a> {
   ) -> Self
   {
     let scope_range = scope.awake().kind().only();
-    let filtered_scope = FilteredScope::new(scope, scope_range, true);
+    let filtered_scope = ScopeFilter::new(scope, scope_range, true);
     DefaultValue {
       name: name.clone(),
       value,
@@ -88,7 +88,7 @@ impl<'a> SourceItem for DefaultValue<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    Ok(())
+    self.var.resolve(Owner::find, &self.name)
   }
 
   fn typecheck(&mut self) -> Result<()> {
@@ -105,6 +105,16 @@ impl ScopeKindRange {
   }
 }
 
+impl Display for ScopeKindRange {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    if self.0 == self.1 {
+      write!(f, "({})", self.0)
+    } else {
+      write!(f, "({} : {})", self.0, self.1)
+    }
+  }
+}
+
 /// These are in order from least specific to most specific.
 /// Searches need to be able to specify their specificity
 /// when searching recursively through scopes.
@@ -117,15 +127,15 @@ pub enum ScopeKind {
 }
 
 impl ScopeKind {
-  fn all() -> ScopeKindRange {
+  pub fn all() -> ScopeKindRange {
     ScopeKindRange(ScopeKind::Global, ScopeKind::FnLocal)
   }
 
-  fn only(self) -> ScopeKindRange {
+  pub fn only(self) -> ScopeKindRange {
     ScopeKindRange(self, self)
   }
 
-  fn and_below(self) -> ScopeKindRange {
+  pub fn and_below(self) -> ScopeKindRange {
     ScopeKindRange(ScopeKind::Global, self)
   }
 }
@@ -146,23 +156,32 @@ pub struct Scope<'a> {
   kind: ScopeKind,
   vars: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
   parent: Option<GraphRef<'a, Scope<'a>>>,
+  span: TokenSpan,
 }
 
 impl<'a> Scope<'a> {
-  pub fn new() -> GraphCell<Self> {
+  pub fn new(span: TokenSpan) -> GraphCell<Self> {
     GraphCell::new(Scope {
       kind: ScopeKind::Global,
       vars: Default::default(),
       parent: None,
+      span,
     })
   }
 
-  pub fn child(this: GraphRef<'a, Scope<'a>>) -> GraphCell<Self> {
+  pub fn child(this: GraphRef<'a, Scope<'a>>, span: TokenSpan) -> GraphCell<Self> {
     GraphCell::new(Scope {
       kind: ScopeKind::Type,
       vars: Default::default(),
       parent: Some(this),
+      span,
     })
+  }
+
+  /// We don't generally know how long a scope lasts until it ends,
+  /// where this should be modified.
+  pub fn span_mut(&mut self) -> &mut TokenSpan {
+    &mut self.span
   }
 
   pub fn parent(&self) -> Option<GraphRef<'a, Scope<'a>>> {
@@ -237,12 +256,38 @@ impl<'a> Scope<'a> {
       .map_err(move |_| error)
   }
 
-  fn kind(&self) -> ScopeKind {
+  pub fn kind(&self) -> ScopeKind {
     self.kind
   }
 
-  fn level(&self) -> u32 {
+  pub fn level(&self) -> u32 {
     self.parent.map(|p| 1 + p.awake().level()).unwrap_or(0)
+  }
+}
+
+impl<'a> Display for Scope<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{} scope ({})", self.kind, self.span)
+  }
+}
+
+impl<'a> SourceItem for Scope<'a> {
+  fn span(&self) -> &TokenSpan {
+    &self.span
+  }
+
+  fn resolve(&mut self) -> Result<()> {
+    for var in self.vars.values_mut() {
+      var.awake_mut().resolve()?;
+    }
+    Ok(())
+  }
+
+  fn typecheck(&mut self) -> Result<()> {
+    for var in self.vars.values_mut() {
+      var.awake_mut().typecheck()?;
+    }
+    Ok(())
   }
 }
 
@@ -269,25 +314,27 @@ impl<'a> Serialize for Scope<'a> {
 }
 
 pub trait Scoped<'a> {
-  fn scope(&self) -> GraphRef<'a, Scope<'a>>;
-  fn scope_mut(&mut self) -> GraphRefMut<'a, Scope<'a>>;
+  fn scope(&self) -> GraphRef<'a, Scope<'a>> {
+    self.scope_mut().asleep_ref()
+  }
+  fn scope_mut(&self) -> GraphRefMut<'a, Scope<'a>>;
 }
 
 #[derive(Debug, Serialize)]
-pub struct FilteredScope<'a> {
+pub struct ScopeFilter<'a> {
   scope: GraphRef<'a, Scope<'a>>,
   range: ScopeKindRange,
   recursive: bool,
 }
 
-impl<'a> FilteredScope<'a> {
+impl<'a> ScopeFilter<'a> {
   pub fn new(
     scope: GraphRef<'a, Scope<'a>>,
     range: ScopeKindRange,
     recursive: bool,
   ) -> Self
   {
-    FilteredScope { scope, range, recursive }
+    ScopeFilter { scope, range, recursive }
   }
 
   pub fn to_inner(&self) -> GraphRef<'a, Scope<'a>> {
@@ -295,7 +342,13 @@ impl<'a> FilteredScope<'a> {
   }
 }
 
-impl<'a> Owner<'a, Variable<'a>> for FilteredScope<'a> {
+impl<'a> Display for ScopeFilter<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "scope filter {}", self.range)
+  }
+}
+
+impl<'a> Owner<'a, Variable<'a>> for ScopeFilter<'a> {
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
     self.scope.awake().find_filtered_mut(name, self.range, self.recursive)
   }
