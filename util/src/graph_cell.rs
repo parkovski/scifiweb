@@ -207,7 +207,7 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
   where
     'a: 'b,
     F: FnOnce(&'b T) -> &'b U + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
   {
     let new_data = self.map_data(map_fn) as *const _;
     GraphRef {
@@ -220,7 +220,7 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
   where
     'a: 'b,
     F: (FnOnce(&'b T) -> Option<&'b U>) + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
   {
     self.map_data(map_fn).map(|data| GraphRef {
       data: data as *const _,
@@ -232,7 +232,7 @@ impl<'a, T: ?Sized + 'a> GraphRef<'a, T> {
   where
     'a: 'b,
     F: FnOnce(&'b T) -> Result<&'b U, E> + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
     E: 'b,
   {
     self.map_data(map_fn).map(|data| GraphRef {
@@ -320,7 +320,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
   where
     'a: 'b,
     F: FnOnce(&'b mut T) -> &'b mut U + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
   {
     let new_data = self.map_data(map_fn) as *mut _;
     GraphRefMut {
@@ -333,7 +333,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
   where
     'a: 'b,
     F: (FnOnce(&'b mut T) -> Option<&'b mut U>) + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
   {
     self.map_data(map_fn).map(|data| GraphRefMut {
       data: data as *mut _,
@@ -345,7 +345,7 @@ impl<'a, T: ?Sized + 'a> GraphRefMut<'a, T> {
   where
     'a: 'b,
     F: FnOnce(&'b mut T) -> Result<&'b mut U, E> + 'b,
-    U: 'a,
+    U: ?Sized + 'a,
     E: 'b,
   {
     self.map_data(map_fn).map(|data| GraphRefMut {
