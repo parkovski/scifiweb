@@ -154,19 +154,22 @@ macro_rules! impl_named {
 }
 
 macro_rules! impl_scoped {
-  ($lifetime:tt, $ty:ident $($bounds:tt)*) => (
+  (for $field:ident : $lifetime:tt in $ty:ident $($bounds:tt)*) => (
     impl $($bounds)* ::ast::var::Scoped<$lifetime> for generic_name_short!($ty $($bounds)*) {
       fn scope(&self)
         -> ::util::graph_cell::GraphRef<$lifetime, ::ast::var::Scope<$lifetime>>
       {
-        self.scope.asleep()
+        self.$field.asleep()
       }
 
       fn scope_mut(&self)
         -> ::util::graph_cell::GraphRefMut<$lifetime, ::ast::var::Scope<$lifetime>>
       {
-        self.scope.asleep_mut()
+        self.$field.asleep_mut()
       }
     }
-  )
+  );
+  ($lifetime:tt, $ty:ident $($bounds:tt)*) => (
+    impl_scoped!(for scope: $lifetime in $ty $($bounds)*);
+  );
 }

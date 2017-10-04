@@ -1,5 +1,5 @@
 {
-  "program": "./vm/dot_scifi/simple.scifi",
+  "program": "./vm/test/simple.scifi",
   "server": {
     "httpAddr": "127.0.0.1:43080",
     "httpsAddr": "127.0.0.1:43081",
@@ -13,7 +13,7 @@
     "showModule": true
   },
   "out": {
-    "cs": "./vm/dot_scifi/out/csharp",
-    "sql": "./vm/dot_scifi/out/sql"
+    "cs": "./vm/test/out/csharp",
+    "sql": "./vm/test/out/sql"
   }
 }

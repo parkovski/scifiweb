@@ -4,7 +4,6 @@ use std::iter::Iterator;
 use serde::ser::{Serialize, Serializer};
 use erased_serde::Serialize as ErasedSerialize;
 use util::graph_cell::*;
-use util::cast::*;
 use compile::{TokenValue, TokenSpan};
 use super::var::*;
 use super::errors::*;
@@ -12,6 +11,7 @@ use super::*;
 
 mod array;
 mod collectable;
+mod earlyref;
 mod event;
 mod function;
 mod object;
@@ -19,6 +19,7 @@ mod user;
 
 pub use self::array::*;
 pub use self::collectable::*;
+pub use self::earlyref::*;
 pub use self::event::*;
 pub use self::function::*;
 pub use self::object::*;
@@ -89,7 +90,7 @@ impl PrimitiveType {
   pub fn make_scope<'a>(&self, global: GraphRef<'a, Scope<'a>>, span: TokenSpan)
     -> GraphCell<Scope<'a>>
   {
-    Scope::child(global, span)
+    Scope::child(global, ScopeKind::TYPE, span)
   }
 }
 
@@ -174,6 +175,7 @@ impl<'a> PrimitiveTypeSet<'a> {
 /// of user defined instances.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub enum BaseCustomType {
+  EarlyRef,
   Array,
   Object,
   Collectable,
@@ -190,6 +192,7 @@ impl BaseCustomType {
   pub fn as_str(&self) -> &'static str {
     use self::BaseCustomType::*;
     match *self {
+      EarlyRef => "undefined reference",
       Array => "array",
       Object => "object",
       Collectable => "collectable",
@@ -209,69 +212,34 @@ impl BaseCustomType {
     name: TokenValue<Arc<str>>
   ) -> Result<()>
   {
-    let global_scope = ast.awake().scope();
     match *self {
-      BaseCustomType::Array => {
-        return Err(ErrorKind::InvalidOperation(
+      BaseCustomType::EarlyRef
+        => Err(ErrorKind::InvalidOperation(
+          "can't create EarlyRef placeholder type"
+        ).into()),
+      BaseCustomType::Array
+        => Err(ErrorKind::InvalidOperation(
           "empty custom array type is not valid - use PrimitiveType::Array"
-        ).into());
-      }
-      BaseCustomType::Object => {
-        Ast::insert_type(
-          ast,
-          Object::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::Collectable => {
-        Ast::insert_type(
-          ast,
-          Collectable::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::CollectableGroup => {
-        Ast::insert_type(
-          ast,
-          CollectableGroup::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::User => {
-        Ast::insert_type(
-          ast,
-          User::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::UserGroup => {
-        Ast::insert_type(
-          ast,
-          UserGroup::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::Event => {
-        Ast::insert_type(
-          ast,
-          Event::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::RemoteEvent => {
-        Ast::insert_type(
-          ast,
-          RemoteEvent::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::Function => {
-        Ast::insert_type(
-          ast,
-          Function::new(name, global_scope)
-        )?;
-      }
-      BaseCustomType::RemoteFunction => {
-        Ast::insert_type(
-          ast,
-          RemoteFunction::new(name, global_scope)
-        )?;
-      }
+        ).into()),
+      BaseCustomType::Object
+        => Object::new(name, ast).map(|_| ()),
+      BaseCustomType::Collectable
+        => Collectable::new(name, ast).map(|_| ()),
+      BaseCustomType::CollectableGroup
+        => CollectableGroup::new(name, ast).map(|_| ()),
+      BaseCustomType::User
+        => User::new(name, ast).map(|_| ()),
+      BaseCustomType::UserGroup
+        => UserGroup::new(name, ast).map(|_| ()),
+      BaseCustomType::Event
+        => Event::new(name, ast).map(|_| ()),
+      BaseCustomType::RemoteEvent
+        => RemoteEvent::new(name, ast).map(|_| ()),
+      BaseCustomType::Function
+        => Function::new(name, ast).map(|_| ()),
+      BaseCustomType::RemoteFunction
+        => RemoteFunction::new(name, ast).map(|_| ()),
     }
-    Ok(())
   }
 }
 
@@ -285,23 +253,23 @@ bitflags! {
   #[derive(Default)]
   pub struct TypeCapability: u32 {
     /// The type has custom properties.
-    const TC_PROPERTIES                        = 0b00000001;
+    const PROPERTIES                        = 0b00000001;
     /// The type can run custom code.
-    const TC_EXECUTE                           = 0b00000010;
+    const EXECUTE                           = 0b00000010;
     /// Instances of the type belong to
     /// another entity. When that entity
     /// is deleted, these should be too.
-    const TC_OWNED                             = 0b00000100;
+    const OWNED                             = 0b00000100;
     /// This type receives notifications
     /// that cause the program to resume.
-    const TC_NOTIFY_RECEIVER                   = 0b00001000;
+    const NOTIFY_RECEIVER                   = 0b00001000;
     /// This type needs to set up a
     /// web endpoint to receive its
     /// notifications.
-    const TC_NOTIFY_ENDPOINT                   = 0b00010000;
+    const NOTIFY_ENDPOINT                   = 0b00010000;
     /// This type may inherit
     /// from another type.
-    const TC_INHERIT                           = 0b00100000;
+    const INHERIT                           = 0b00100000;
   }
 }
 

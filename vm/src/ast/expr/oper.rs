@@ -4,9 +4,9 @@ use util::graph_cell::GraphRef;
 use compile::{TokenValue, TokenSpan};
 use ast::{SourceItem, ItemRef};
 use ast::ty::Type;
-use ast::var::{ScopeFilter, Scoped};
+use ast::var::{ScopeFilter, ScopeKind, Scoped};
 use ast::errors::*;
-use super::{Expression, BoxExpression};
+use super::{Expression, BoxExpression, ExpressionKind};
 
 #[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
 pub enum PrefixOperator {
@@ -204,6 +204,16 @@ impl<'a> SourceItem for PrefixExpr<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
+    if *self.operator.value() == PrefixOperator::Dot {
+      if self.subexpr.kind() != ExpressionKind::Var
+        || !self.subexpr.set_scope_filter_kind(ScopeKind::TYPE)
+      {
+        return Err(ErrorKind::InvalidExpression(
+          self.subexpr.to_string(),
+          self.subexpr.span().clone(),
+        ).into());
+      }
+    }
     self.subexpr.resolve()
   }
 
@@ -213,6 +223,10 @@ impl<'a> SourceItem for PrefixExpr<'a> {
 }
 
 impl<'a> Expression<'a> for PrefixExpr<'a> {
+  fn kind(&self) -> ExpressionKind {
+    ExpressionKind::UnaryOp
+  }
+
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.ty.item().unwrap()
   }
@@ -262,14 +276,18 @@ impl<'a> SourceItem for BinaryExpr<'a> {
 
   fn resolve(&mut self) -> Result<()> {
     self.left.resolve()?;
-    // Special case: the '.' operator makes the right side look at the scope
-    // of the left.
+    // Special case: the '.' operator requires an `ExprVar` on the right,
+    // and changes its scope filter.
     if *self.operator.value() == BinaryOperator::Dot {
-      let ty = self.left.ty();
-      let scope = ty.awake().scope();
-      let range = scope.awake().kind().only();
-      let filter = ScopeFilter::new(scope, range, true);
-      if !self.right.set_scope_filter(filter) {
+      if self.right.kind() != ExpressionKind::Var
+        || !{
+          let ty = self.left.ty();
+          let scope = ty.awake().scope();
+          let kind = scope.awake().kind();
+          let filter = ScopeFilter::new(scope, kind);
+          self.right.set_scope_filter(filter)
+        }
+      {
         return Err(ErrorKind::InvalidExpression(
           self.right.to_string(),
           self.right.span().clone(),
@@ -285,6 +303,10 @@ impl<'a> SourceItem for BinaryExpr<'a> {
 }
 
 impl<'a> Expression<'a> for BinaryExpr<'a> {
+  fn kind(&self) -> ExpressionKind {
+    ExpressionKind::BinaryOp
+  }
+
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.ty.item().unwrap()
   }
@@ -353,6 +375,10 @@ impl<'a> SourceItem for PostfixListExpr<'a> {
 }
 
 impl<'a> Expression<'a> for PostfixListExpr<'a> {
+  fn kind(&self) -> ExpressionKind {
+    ExpressionKind::ListOp
+  }
+
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.ty.item().unwrap()
   }

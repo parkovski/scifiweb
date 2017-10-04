@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::fmt::{self, Display};
+use fxhash::FxHashMap;
 use util::graph_cell::GraphRef;
 use util::later::Later;
 use compile::{TokenSpan, TokenValue};
 //use ast::var::{Scope, Variable};
 //use ast::ty::{PrimitiveType, Type};
 use ast::*;
-use super::Expression;
+use super::{Expression, ExpressionKind, BoxExpression};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[repr(u16)]
@@ -108,15 +109,19 @@ impl TimeSpanPart {
 #[derive(Debug, Serialize)]
 pub struct ExprVar<'a> {
   name: TokenValue<Arc<str>>,
-  scope: GraphRef<'a, Scope<'a>>,
+  scope_filter: ScopeFilter<'a>,
   var: Later<GraphRef<'a, Variable<'a>>>,
 }
 
 impl<'a> ExprVar<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, scope: GraphRef<'a, Scope<'a>>) -> Self {
+  pub fn new(
+    name: TokenValue<Arc<str>>,
+    scope_filter: ScopeFilter<'a>
+  ) -> Self
+  {
     ExprVar {
       name,
-      scope,
+      scope_filter,
       var: Later::new(),
     }
   }
@@ -124,7 +129,7 @@ impl<'a> ExprVar<'a> {
 
 impl<'a> Display for ExprVar<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    Display::fmt(&self.var.awake(), f)
+    f.write_str(&self.name)
   }
 }
 
@@ -134,7 +139,7 @@ impl<'a> SourceItem for ExprVar<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    match self.scope.awake().find(&self.name) {
+    match self.scope_filter.find(&self.name) {
       Some(v) => Ok(self.var.set(v)),
       None => Err(ErrorKind::NotDefined(self.name.clone(), "variable").into()),
     }
@@ -146,6 +151,10 @@ impl<'a> SourceItem for ExprVar<'a> {
 }
 
 impl<'a> Expression<'a> for ExprVar<'a> {
+  fn kind(&self) -> ExpressionKind {
+    ExpressionKind::Var
+  }
+
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.var.awake().ty()
   }
@@ -153,10 +162,20 @@ impl<'a> Expression<'a> for ExprVar<'a> {
   fn is_constant(&self) -> bool {
     false
   }
+
+  fn set_scope_filter(&mut self, filter: ScopeFilter<'a>) -> bool {
+    self.scope_filter = filter;
+    true
+  }
+
+  fn set_scope_filter_kind(&mut self, kind: ScopeKind) -> bool {
+    self.scope_filter.set_kind(kind);
+    true
+  }
 }
 
 #[derive(Debug, Serialize)]
-pub enum Literal {
+pub enum Literal<'a> {
   Option(TokenValue<bool>),
   Text(TokenValue<Arc<str>>),
   LocalizedText(TokenValue<Arc<str>>),
@@ -164,11 +183,11 @@ pub enum Literal {
   Decimal(TokenValue<f64>),
   //DateTime(???),
   TimeSpan(Vec<TimeSpanPart>),
-  //Object(???),
-  //Array(???),
+  Object(FxHashMap<TokenValue<Arc<str>>, BoxExpression<'a>>),
+  Array(Vec<BoxExpression<'a>>),
 }
 
-impl Literal {
+impl<'a> Literal<'a> {
   pub fn primitive_type(&self) -> PrimitiveType {
     match *self {
       Literal::Option(_) => PrimitiveType::Option,
@@ -177,32 +196,42 @@ impl Literal {
       Literal::Integer(_) => PrimitiveType::Integer,
       Literal::Decimal(_) => PrimitiveType::Decimal,
       Literal::TimeSpan(_) => PrimitiveType::TimeSpan,
+      Literal::Object(_) => PrimitiveType::Object,
+      Literal::Array(_) => PrimitiveType::Array,
     }
   }
 }
 
-impl Display for Literal {
+impl<'a> Display for Literal<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
       Literal::Option(ref o) => f.write_str(if *o.value() { "yes" } else { "no" }),
-      Literal::Text(ref t) => f.write_str(&t),
-      Literal::LocalizedText(ref t) => f.write_str(&t),
-      Literal::Integer(ref i) => write!(f, "{}", i),
-      Literal::Decimal(ref d) => write!(f, "{}", d),
-      // FIXME!
-      Literal::TimeSpan(ref ts) => f.write_str("timespan"),
+      Literal::Text(ref t) => f.write_str(t.value()),
+      Literal::LocalizedText(ref t) => f.write_str(t.value()),
+      Literal::Integer(ref i) => write!(f, "{}", i.value()),
+      Literal::Decimal(ref d) => write!(f, "{}", d.value()),
+      Literal::TimeSpan(ref parts) => {
+        debug_assert!(!parts.is_empty());
+        for (i, part) in parts.into_iter().enumerate() {
+          if i > 0 { f.write_str(" ")?; }
+          write!(f, "{} {}", part.amount(), part.unit())?;
+        }
+        Ok(())
+      }
+      Literal::Object(ref _o) => unimplemented!(),
+      Literal::Array(ref _a) => unimplemented!(),
     }
   }
 }
 
 #[derive(Debug, Serialize)]
 pub struct ExprLiteral<'a> {
-  literal: Literal,
+  literal: Literal<'a>,
   ty: GraphRef<'a, Type<'a>>,
 }
 
 impl<'a> ExprLiteral<'a> {
-  pub fn new(literal: Literal, ty: GraphRef<'a, Type<'a>>) -> Self {
+  pub fn new(literal: Literal<'a>, ty: GraphRef<'a, Type<'a>>) -> Self {
     ExprLiteral { literal, ty }
   }
 }
@@ -223,24 +252,51 @@ impl<'a> SourceItem for ExprLiteral<'a> {
       Literal::Decimal(ref d) => d.span(),
       // FIXME!
       Literal::TimeSpan(ref ts) => ts[0].span(),
+      Literal::Object(ref _o) => unimplemented!(),
+      Literal::Array(ref _a) => unimplemented!(),
     }
   }
 
   fn resolve(&mut self) -> Result<()> {
+    if let Literal::Object(ref mut o) = self.literal {
+      for expr in o.values_mut() {
+        expr.resolve()?;
+      }
+    } else if let Literal::Array(ref mut a) = self.literal {
+      for expr in a {
+        expr.resolve()?;
+      }
+    }
     Ok(())
   }
 
   fn typecheck(&mut self) -> Result<()> {
+    if let Literal::Object(ref mut o) = self.literal {
+      for expr in o.values_mut() {
+        expr.typecheck()?;
+      }
+    } else if let Literal::Array(ref mut a) = self.literal {
+      for expr in a {
+        expr.typecheck()?;
+      }
+    }
     Ok(())
   }
 }
 
 impl<'a> Expression<'a> for ExprLiteral<'a> {
+  fn kind(&self) -> ExpressionKind {
+    ExpressionKind::Literal
+  }
+
   fn ty(&self) -> GraphRef<'a, Type<'a>> {
     self.ty
   }
 
   fn is_constant(&self) -> bool {
-    true
+    match self.literal {
+      Literal::Object(_) | Literal::Array(_) => false,
+      _ => true,
+    }
   }
 }

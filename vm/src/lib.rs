@@ -26,4 +26,4 @@ mod macros;
 
 pub mod ast;
 pub mod compile;
-pub use compile::compile_graph;
+pub use compile::{compile_file, compile_string};

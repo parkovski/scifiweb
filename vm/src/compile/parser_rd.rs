@@ -128,6 +128,8 @@ pub struct Parser<'p, 'ast: 'p> {
   ast: GraphRefMut<'ast, Ast<'ast>>,
 }
 
+// TODO: Remove when this is finished.
+#[allow(dead_code)]
 impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   fn new(
     filename: Arc<PathBuf>,
@@ -193,21 +195,21 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   }
 
   pub fn parse_str(
-    filename: PathBuf,
+    filename: &Path,
     program: &'p str,
-  ) -> Result<Box<GraphCell<Ast<'ast>>>>
+    ast: GraphRefMut<'ast, Ast<'ast>>,
+  ) -> Result<()>
   {
     let mut includes = Default::default();
-    let ast = Ast::new();
     let mut parser = Self::new(
-      Arc::new(filename),
+      Arc::new(filename.into()),
       &mut includes,
       program.as_bytes(),
-      ast.asleep_mut(),
+      ast,
     );
     parser.parse_program()?;
     ast.awake().typecheck()?;
-    Ok(ast)
+    Ok(())
   }
 
   // <>Program
@@ -232,37 +234,31 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
           base_type.insert_empty_type(self.ast, label)?;
         } else {
           self.consume(TokenKind::Colon)?;
+          // FIXME: These give out pointers to their scope, so they must
+          // be created in place and not moved!
           match base_type {
-            | BaseCustomType::Collectable => {
-              Ast::insert_type(self.ast, self.parse_collectable(label)?)?;
-            }
-            | BaseCustomType::CollectableGroup => {
-              Ast::insert_type(self.ast, self.parse_collectable_group(label)?)?;
-            }
-            | BaseCustomType::User => {
-              Ast::insert_type(self.ast, self.parse_user(label)?)?;
-            }
-            | BaseCustomType::UserGroup => {
-              Ast::insert_type(self.ast, self.parse_user_group(label)?)?;
-            }
-            | BaseCustomType::Event => {
-              Ast::insert_type(self.ast, self.parse_event(label)?)?;
-            }
-            | BaseCustomType::RemoteEvent => {
-              Ast::insert_type(self.ast, self.parse_remote_event(label)?)?;
-            }
-            | BaseCustomType::Function => {
-              Ast::insert_type(self.ast, self.parse_function(label)?)?;
-            }
-            | BaseCustomType::RemoteFunction => {
-              Ast::insert_type(self.ast, self.parse_remote_function(label)?)?;
-            }
-            | BaseCustomType::Object => {
-              Ast::insert_type(self.ast, self.parse_object_type(label)?)?;
-            }
+            | BaseCustomType::EarlyRef => unreachable!(),
+            | BaseCustomType::Collectable
+              => self.parse_collectable(label),
+            | BaseCustomType::CollectableGroup
+              => self.parse_collectable_group(label),
+            | BaseCustomType::User
+              => self.parse_user(label),
+            | BaseCustomType::UserGroup
+              => self.parse_user_group(label),
+            | BaseCustomType::Event
+              => self.parse_event(label),
+            | BaseCustomType::RemoteEvent
+              => self.parse_remote_event(label),
+            | BaseCustomType::Function
+              => self.parse_function(label),
+            | BaseCustomType::RemoteFunction
+              => self.parse_remote_function(label),
+            | BaseCustomType::Object
+              => self.parse_object_type(label),
             | BaseCustomType::Array
               => return self.e_syntax("custom array types are defined inline"),
-          }
+          }?;
           self.parse_end()?;
         }
       }
@@ -398,14 +394,14 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // <>User
 
-  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<User<'ast>> {
-    unimplemented!()
+  fn parse_user(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    User::new(label, self.ast)?;
+    Ok(())
   }
 
-  fn parse_user_group(&mut self, label: TokenValue<Arc<str>>)
-    -> Result<UserGroup<'ast>>
-  {
-    unimplemented!()
+  fn parse_user_group(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    UserGroup::new(label, self.ast)?;
+    Ok(())
   }
 
   // <>Collectable
@@ -421,9 +417,10 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
   }
 
   fn parse_collectable_group(&mut self, label: TokenValue<Arc<str>>)
-    -> Result<CollectableGroup<'ast>>
+    -> Result<()>
   {
-    let mut group = CollectableGroup::new(label, self.ast.awake().scope());
+    let _group = CollectableGroup::new(label, self.ast)?;
+    let mut group = _group.awake_mut();
     group.set_auto_grouping(self.parse_auto_grouping()?);
     let mut vec = Self::all_init(&[
       Self::parse_has_collectable,
@@ -438,26 +435,28 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     loop {
       if self.opt_consume(Keyword::Property)? {
         let scope = group.scope_mut();
-        scope.awake_mut().insert(self.parse_property(scope)?)?;
+        let prop = self.parse_property(scope)?;
+        scope.awake_mut().insert(prop)?;
         self.consume(TokenKind::Semicolon)?;
       } else if self.token == Keyword::Has {
         if !Self::all_done(&vec) {
           self.advance()?;
-          self.all_next(&mut vec, &mut group)?;
+          self.all_next(&mut vec, &mut *group)?;
           self.consume(TokenKind::Semicolon)?;
         } else {
           return self.e_syntax("only one of each has * block allowed");
         }
       } else {
-        return Ok(group);
+        return Ok(());
       }
     }
   }
 
   fn parse_collectable(&mut self, label: TokenValue<Arc<str>>)
-    -> Result<Collectable<'ast>>
+    -> Result<()>
   {
-    let mut collectable = Collectable::new(label, self.ast.awake().scope());
+    let _collectable = Collectable::new(label, self.ast)?;
+    let mut collectable = _collectable.awake_mut();
     collectable.set_auto_grouping(self.parse_auto_grouping()?);
     let mut vec = Self::all_init(&[
       |this: &mut Self, coll: &mut Collectable<'ast>| -> Result<()> {
@@ -470,54 +469,45 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     loop {
       if self.opt_consume(Keyword::Property)? {
         let scope = collectable.scope_mut();
-        scope.awake_mut().insert(self.parse_property(scope)?)?;
+        let prop = self.parse_property(scope)?;
+        scope.awake_mut().insert(prop)?;
         self.consume(TokenKind::Semicolon)?;
       } else if self.token == Keyword::Has {
         if !Self::all_done(&vec) {
           self.advance()?;
-          self.all_next(&mut vec, &mut collectable)?;
+          self.all_next(&mut vec, &mut *collectable)?;
           self.consume(TokenKind::Semicolon)?;
         } else {
-          return self.e_syntax("only one of each has * block allowed");
+          return self.e_syntax("only one of each `has *` block allowed");
         }
       } else {
-        return Ok(collectable);
+        return Ok(());
       }
     }
   }
 
-  fn parse_inline_collectable(
-    &mut self,
-    group: &mut CollectableGroup<'ast>,
-  ) -> Result<()>
-  {
+  fn parse_inline_collectable(&mut self) -> Result<EarlyRefType<'ast>> {
     self.expect(TokenMatch::Identifier)?;
-    group.insert_collectable_ref(ItemRefMut::new(
+    let ty = EarlyRefType::new(
       self.string_token_value(),
-      self.ast.asleep_ref()
-    ))?;
+      BaseCustomType::Collectable
+    );
     self.advance()?;
-    //self.all(&[Self::parse_upgrades, Self::parse_redemptions], group, false)?;
-    Ok(())
+    Ok(ty)
   }
 
-  fn parse_inline_collectable_group(
-    &mut self,
-    group: &mut CollectableGroup<'ast>,
-  ) -> Result<()>
-  {
+  fn parse_inline_collectable_group(&mut self) -> Result<EarlyRefType<'ast>> {
     self.expect(TokenMatch::Identifier)?;
-    group.insert_group_ref(ItemRefMut::new(
+    let ty = EarlyRefType::new(
       self.string_token_value(),
-      self.ast.asleep_ref()
-    ))?;
+      BaseCustomType::CollectableGroup
+    );
     self.advance()?;
-    Ok(())
+    Ok(ty)
   }
 
   fn parse_has_collectable_or_group(
     &mut self,
-    group: &mut CollectableGroup<'ast>,
     is_inline_group: bool,
   ) -> Result<()>
   {
@@ -537,32 +527,34 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
       Self::parse_inline_collectable
     };
 
+    let add_item = move |this: &mut Self| -> Result<()> {
+      let item = inline_item(this)?;
+      Ast::insert_type(this.ast, item)?;
+      Ok(())
+    };
+
     if self.token == TokenKind::LSquareBracket {
       self.parse_delimited_list_unit(
         TokenKind::LSquareBracket,
         TokenKind::Comma,
         TokenKind::RSquareBracket,
-        move |this| inline_item(this, group),
+        add_item,
       )
     } else {
-      inline_item(self, group)
+      add_item(self)
     }
   }
 
-  fn parse_has_collectable(
-    &mut self,
-    group: &mut CollectableGroup<'ast>,
-  ) -> Result<()>
+  fn parse_has_collectable(&mut self, _: &mut CollectableGroup<'ast>)
+    -> Result<()>
   {
-    self.parse_has_collectable_or_group(group, false)
+    self.parse_has_collectable_or_group(false)
   }
 
-  fn parse_has_collectable_group(
-    &mut self,
-    group: &mut CollectableGroup<'ast>,
-  ) -> Result<()>
+  fn parse_has_collectable_group(&mut self, _: &mut CollectableGroup<'ast>)
+    -> Result<()>
   {
-    self.parse_has_collectable_or_group(group, true)
+    self.parse_has_collectable_or_group(true)
   }
 
   fn parse_upgrades(
@@ -583,32 +575,33 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
 
   // <>Event
 
-  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<Event<'ast>> {
-    unimplemented!()
+  fn parse_event(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    Event::new(label, self.ast)?;
+    Ok(())
   }
 
-  fn parse_remote_event(&mut self, label: TokenValue<Arc<str>>)
-    -> Result<RemoteEvent<'ast>>
-  {
-    unimplemented!()
+  fn parse_remote_event(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    RemoteEvent::new(label, self.ast)?;
+    Ok(())
   }
 
   // <>Function
 
-  fn parse_function(&mut self, label: TokenValue<Arc<str>>) -> Result<Function<'ast>> {
-    unimplemented!()
+  fn parse_function(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    Function::new(label, self.ast)?;
+    Ok(())
   }
 
-  fn parse_remote_function(&mut self, label: TokenValue<Arc<str>>)
-    -> Result<RemoteFunction<'ast>>
-  {
-    unimplemented!()
+  fn parse_remote_function(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    RemoteFunction::new(label, self.ast)?;
+    Ok(())
   }
 
   // <>Object
 
-  fn parse_object_type(&mut self, label: TokenValue<Arc<str>>) -> Result<Object<'ast>> {
-    unimplemented!()
+  fn parse_object_type(&mut self, label: TokenValue<Arc<str>>) -> Result<()> {
+    Object::new(label, self.ast)?;
+    Ok(())
   }
 
   // <>Variable
@@ -710,11 +703,11 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     if self.token == TokenMatch::Identifier {
       let tv = self.string_token_value();
       self.advance()?;
-      Ok(box ExprVar::new(tv, scope.asleep_ref()))
+      Ok(box ExprVar::new(tv, scope.asleep_ref().into()))
     } else if self.token == Keyword::Amount {
       let tv = self.string_token_value();
       self.advance()?;
-      Ok(box ExprVar::new(tv, scope.asleep_ref()))
+      Ok(box ExprVar::new(tv, scope.asleep_ref().into()))
     } else if self.token == TokenMatch::Decimal || self.token == TokenMatch::Percentage {
       let tv = self.float_token_value().unwrap();
       self.advance()?;
@@ -844,7 +837,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
     close: Cc,
     parser: P,
     accumulator: A,
-    fold_item: F,
+    folder: F,
   ) -> Result<A>
   where
     Co: SyntaxConsumer<'p, 'ast>,
@@ -860,7 +853,7 @@ impl<'p, 'ast: 'p> Parser<'p, 'ast> {
         separator,
         parser,
         accumulator,
-        fold_item,
+        folder,
       ),
     )
   }

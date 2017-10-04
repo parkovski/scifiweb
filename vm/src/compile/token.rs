@@ -430,6 +430,7 @@ keywords! {
   "function" => Function,
   "distribution" => Distribution,
 
+  "this" => This,
   "yes" => Yes,
   "no" => No,
   "milliseconds" => Milliseconds,

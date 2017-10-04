@@ -50,7 +50,7 @@ impl<'a> Array<'a> {
       name,
       ty,
       max_length,
-      scope: Scope::child(parent_scope, span)
+      scope: Scope::child(parent_scope, ScopeKind::TYPE, span)
     }
   }
 }
@@ -88,6 +88,6 @@ impl<'a> CustomType<'a> for Array<'a> {
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_OWNED
+    TypeCapability::OWNED
   }
 }

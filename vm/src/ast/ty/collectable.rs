@@ -20,38 +20,46 @@ pub enum AutoGrouping {
 
 /// This is a super type for any of its collectables.
 #[derive(Debug, Serialize)]
-pub struct CollectableGroup<'a> {
+pub struct CollectableGroup<'ast> {
   name: TokenValue<Arc<str>>,
 
-  self_ref: Later<GraphRef<'a, CollectableGroup<'a>>>,
+  self_ref: Later<GraphRef<'ast, CollectableGroup<'ast>>>,
 
   auto_grouping: AutoGrouping,
 
-  parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
+  parent: Option<GraphRef<'ast, CollectableGroup<'ast>>>,
 
-  scope: GraphCell<Scope<'a>>,
+  scope: GraphCell<Scope<'ast>>,
 
-  collectables: FxHashMap<Arc<str>, ItemRefMut<'a, Collectable<'a>>>,
-  sub_groups: FxHashMap<Arc<str>, ItemRefMut<'a, CollectableGroup<'a>>>,
+  collectables: FxHashMap<Arc<str>, ItemRefMut<'ast, Collectable<'ast>>>,
+  sub_groups: FxHashMap<Arc<str>, ItemRefMut<'ast, CollectableGroup<'ast>>>,
 
   upgrades: Option<Vec<Upgrade>>,
   redemptions: Option<Vec<Redemption>>,
 }
 
-impl<'a> CollectableGroup<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> CollectableGroup<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    CollectableGroup {
-      name,
-      self_ref: Later::new(),
-      auto_grouping: AutoGrouping::Inherit,
-      parent: None,
-      scope: Scope::child(parent_scope, span),
-      collectables: Default::default(),
-      sub_groups: Default::default(),
-      upgrades: None,
-      redemptions: None,
-    }
+    let cg = Ast::insert_cast_type(
+      ast,
+      CollectableGroup {
+        name,
+        self_ref: Later::new(),
+        auto_grouping: AutoGrouping::Inherit,
+        parent: None,
+        scope: Scope::child(parent_scope, ScopeKind::TYPE | ScopeKind::RECURSIVE, span),
+        collectables: Default::default(),
+        sub_groups: Default::default(),
+        upgrades: None,
+        redemptions: None,
+      }
+    )?;
+    Later::set(&mut cg.awake_mut().self_ref, cg.asleep_ref());
+    Ok(cg)
   }
 
   pub fn auto_grouping(&self) -> AutoGrouping {
@@ -62,7 +70,7 @@ impl<'a> CollectableGroup<'a> {
     self.auto_grouping = ag;
   }
 
-  pub fn insert_collectable_ref(&mut self, r: ItemRefMut<'a, Collectable<'a>>) -> Result<()> {
+  pub fn insert_collectable_ref(&mut self, r: ItemRefMut<'ast, Collectable<'ast>>) -> Result<()> {
     self.collectables
       .insert_unique(r.name().value().clone(), r)
       .map_err(|(_, r)|
@@ -72,7 +80,7 @@ impl<'a> CollectableGroup<'a> {
       )
   }
 
-  pub fn insert_group_ref(&mut self, r: ItemRefMut<'a, CollectableGroup<'a>>) -> Result<()> {
+  pub fn insert_group_ref(&mut self, r: ItemRefMut<'ast, CollectableGroup<'ast>>) -> Result<()> {
     self.sub_groups
       .insert_unique(r.name().value().clone(), r)
       .map_err(|(_, r)|
@@ -92,15 +100,15 @@ impl<'a> CollectableGroup<'a> {
 }
 
 type_macros!(
-  CollectableGroup<'a>;
+  CollectableGroup<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for CollectableGroup<'a> {
+impl<'ast> SourceItem for CollectableGroup<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -124,73 +132,65 @@ impl<'a> SourceItem for CollectableGroup<'a> {
   }
 }
 
-impl<'a> CastType<'a> for CollectableGroup<'a> {
+impl<'ast> CastType<'ast> for CollectableGroup<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::CollectableGroup;
 }
 
-impl<'a> CustomType<'a> for CollectableGroup<'a> {
-  fn init_cyclic(
-    &mut self,
-    self_ref: GraphRef<'a, Self>,
-    _ast_ref: GraphRef<'a, Ast<'a>>
-  ) where Self: Sized
-  {
-    self.self_ref.set(self_ref);
-  }
-
+impl<'ast> CustomType<'ast> for CollectableGroup<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::CollectableGroup
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_PROPERTIES | TC_INHERIT
+    TypeCapability::PROPERTIES | TypeCapability::INHERIT
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
+  fn property(&self, name: &str) -> Option<GraphRef<'ast, Variable<'ast>>> {
     self.scope.awake().find(name)
   }
 
-  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+  fn is_sub_type_of(&self, _ty: &CustomType<'ast>) -> bool {
     false
   }
 }
 
-impl<'a> SubType<'a, CollectableGroup<'a>> for CollectableGroup<'a> {
-  fn super_type(&self) -> Option<GraphRef<'a, CollectableGroup<'a>>> {
+impl<'ast> SubType<'ast, CollectableGroup<'ast>> for CollectableGroup<'ast> {
+  fn super_type(&self) -> Option<GraphRef<'ast, CollectableGroup<'ast>>> {
     self.parent
   }
 
-  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, CollectableGroup<'a>>) {
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'ast, CollectableGroup<'ast>>) {
     self.parent = Some(super_type);
   }
 }
 
 #[derive(Debug, Serialize)]
-pub struct Collectable<'a> {
+pub struct Collectable<'ast> {
   name: TokenValue<Arc<str>>,
-  parent: Option<GraphRef<'a, CollectableGroup<'a>>>,
+  parent: Option<GraphRef<'ast, CollectableGroup<'ast>>>,
   auto_grouping: AutoGrouping,
-  scope: GraphCell<Scope<'a>>,
+  scope: GraphCell<Scope<'ast>>,
   upgrades: Option<Vec<Upgrade>>,
   redemptions: Option<Vec<Redemption>>,
 }
 
-impl<'a> Collectable<'a> {
+impl<'ast> Collectable<'ast> {
   pub fn new(
     name: TokenValue<Arc<str>>,
-    parent_scope: GraphRef<'a, Scope<'a>>,
+    ast: GraphRefMut<'ast, Ast<'ast>>,
   )
-    -> Self
+    -> Result<GraphRefMut<'ast, Self>>
   {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    Collectable {
+    Ast::insert_cast_type(ast, Collectable {
       name,
       parent: None,
       auto_grouping: AutoGrouping::Inherit,
-      scope: Scope::child(parent_scope, span),
+      scope: Scope::child(parent_scope, ScopeKind::TYPE | ScopeKind::RECURSIVE, span),
       upgrades: None,
       redemptions: None,
-    }
+    })
   }
 
   pub fn auto_grouping(&self) -> AutoGrouping {
@@ -211,20 +211,22 @@ impl<'a> Collectable<'a> {
 }
 
 type_macros!(
-  Collectable<'a>;
+  Collectable<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for Collectable<'a> {
+impl<'ast> SourceItem for Collectable<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
 
   fn resolve(&mut self) -> Result<()> {
+    // TODO: This may not resolve super types, depending on order.
+    // Need to change the way those are set, with a placeholder type.
     self.scope.awake_mut().resolve()
   }
 
@@ -233,36 +235,36 @@ impl<'a> SourceItem for Collectable<'a> {
   }
 }
 
-impl<'a> CastType<'a> for Collectable<'a> {
+impl<'ast> CastType<'ast> for Collectable<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::Collectable;
 }
 
-impl<'a> CustomType<'a> for Collectable<'a> {
+impl<'ast> CustomType<'ast> for Collectable<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::Collectable
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_PROPERTIES | TC_OWNED | TC_INHERIT
+    TypeCapability::PROPERTIES | TypeCapability::OWNED | TypeCapability::INHERIT
   }
 
-  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+  fn is_sub_type_of(&self, _ty: &CustomType<'ast>) -> bool {
     false
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
+  fn property(&self, _name: &str) -> Option<GraphRef<'ast, Variable<'ast>>> {
     //self.properties.get(name)
     //  .or_else(|| self.parent.map(|p| p.properties.get(name)))
     None
   }
 }
 
-impl<'a> SubType<'a, CollectableGroup<'a>> for Collectable<'a> {
-  fn super_type(&self) -> Option<GraphRef<'a, CollectableGroup<'a>>> {
+impl<'ast> SubType<'ast, CollectableGroup<'ast>> for Collectable<'ast> {
+  fn super_type(&self) -> Option<GraphRef<'ast, CollectableGroup<'ast>>> {
     self.parent
   }
 
-  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, CollectableGroup<'a>>) {
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'ast, CollectableGroup<'ast>>) {
     self.parent = Some(super_type);
   }
 }

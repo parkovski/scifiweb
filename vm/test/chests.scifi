@@ -51,5 +51,18 @@ distribution of Card LargeChestRewards:
   group x range (3, 5) of [
     CommonCard weighted 85%,
     RareCard x max 4
-  ]
+  ];
+end;
+
+object Offer:
+  property items array of collectable;
+  property cost collectable;
+  property amt decimal;
+end;
+
+Offer has event Redeem() <- player:
+
+end;
+
+function SpecialOffer():
 end;

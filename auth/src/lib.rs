@@ -39,6 +39,20 @@ pub struct User {
   groups: Vec<u64>,
 }
 
+impl User {
+  pub fn id(&self) -> u64 {
+    self.id
+  }
+
+  pub fn name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn groups(&self) -> &[u64] {
+    &self.groups
+  }
+}
+
 pub struct AccountManager {
   pub facebook_id: Option<u64>,
 }

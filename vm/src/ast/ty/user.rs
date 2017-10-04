@@ -30,14 +30,14 @@ impl Default for MembershipMode {
 /// and if either has undefined precedence, the new group
 /// will fail to add.
 #[derive(Debug, Serialize)]
-pub enum Precedence<'a> {
+pub enum Precedence<'ast> {
   Undefined,
-  Higher(ItemRef<'a, UserGroup<'a>>),
-  Equal(ItemRef<'a, UserGroup<'a>>),
-  Lower(ItemRef<'a, UserGroup<'a>>),
+  Higher(ItemRef<'ast, UserGroup<'ast>>),
+  Equal(ItemRef<'ast, UserGroup<'ast>>),
+  Lower(ItemRef<'ast, UserGroup<'ast>>),
 }
 
-impl<'a> Default for Precedence<'a> {
+impl<'ast> Default for Precedence<'ast> {
   fn default() -> Self {
     Precedence::Undefined
   }
@@ -47,44 +47,50 @@ impl<'a> Default for Precedence<'a> {
 /// can belong to multiple user groups, which mostly just serve to
 /// establish permissions.
 #[derive(Debug, Serialize)]
-pub struct UserGroup<'a> {
+pub struct UserGroup<'ast> {
   name: TokenValue<Arc<str>>,
-  scope: GraphCell<Scope<'a>>,
+  scope: GraphCell<Scope<'ast>>,
   /// Whether to allow or deny membership by default.
   membership_mode: MembershipMode,
   /// User types to allow to join this group when in `Deny` mode,
   /// or to deny when in `Allow` mode.
-  except_members: Vec<ItemRef<'a, User<'a>>>,
+  except_members: Vec<ItemRef<'ast, User<'ast>>>,
   /// User groups that cannot be combined with this group.
-  deny_with: Vec<ItemRef<'a, UserGroup<'a>>>,
+  deny_with: Vec<ItemRef<'ast, UserGroup<'ast>>>,
   /// Group combination behavior. Cyclic precedence graphs are invalid.
-  precedence: Precedence<'a>,
+  precedence: Precedence<'ast>,
 }
 
 type_macros!(
-  UserGroup<'a>;
+  UserGroup<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> UserGroup<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> UserGroup<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    UserGroup {
-      name,
-      scope: Scope::child(parent_scope, span),
-      membership_mode: Default::default(),
-      except_members: Vec::new(),
-      deny_with: Vec::new(),
-      precedence: Default::default(),
-    }
+    Ast::insert_cast_type(
+      ast,
+      UserGroup {
+        name,
+        scope: Scope::child(parent_scope, ScopeKind::TYPE, span),
+        membership_mode: Default::default(),
+        except_members: Vec::new(),
+        deny_with: Vec::new(),
+        precedence: Default::default(),
+      }
+    )
   }
 }
 
-impl<'a> SourceItem for UserGroup<'a> {
+impl<'ast> SourceItem for UserGroup<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -98,17 +104,17 @@ impl<'a> SourceItem for UserGroup<'a> {
   }
 }
 
-impl<'a> CastType<'a> for UserGroup<'a> {
+impl<'ast> CastType<'ast> for UserGroup<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::UserGroup;
 }
 
-impl<'a> CustomType<'a> for UserGroup<'a> {
+impl<'ast> CustomType<'ast> for UserGroup<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::UserGroup
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_NOTIFY_RECEIVER
+    TypeCapability::NOTIFY_RECEIVER
   }
 }
 
@@ -120,33 +126,39 @@ impl<'a> CustomType<'a> for UserGroup<'a> {
 /// that is not specified here. Those targets are listed on the events,
 /// which will be incorporated into the generated user types for the client.
 #[derive(Debug, Serialize)]
-pub struct User<'a> {
+pub struct User<'ast> {
   name: TokenValue<Arc<str>>,
-  properties: FxHashMap<Arc<str>, GraphCell<Variable<'a>>>,
-  scope: GraphCell<Scope<'a>>,
+  properties: FxHashMap<Arc<str>, GraphCell<Variable<'ast>>>,
+  scope: GraphCell<Scope<'ast>>,
 }
 
-impl<'a> User<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> User<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    User {
-      name,
-      properties: Default::default(),
-      scope: Scope::child(parent_scope, span),
-    }
+    Ast::insert_cast_type(
+      ast,
+      User {
+        name,
+        properties: Default::default(),
+        scope: Scope::child(parent_scope, ScopeKind::TYPE, span),
+      }
+    )
   }
 }
 
 type_macros!(
-  User<'a>;
+  User<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for User<'a> {
+impl<'ast> SourceItem for User<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -160,20 +172,20 @@ impl<'a> SourceItem for User<'a> {
   }
 }
 
-impl<'a> CastType<'a> for User<'a> {
+impl<'ast> CastType<'ast> for User<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::User;
 }
 
-impl<'a> CustomType<'a> for User<'a> {
+impl<'ast> CustomType<'ast> for User<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::User
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_NOTIFY_RECEIVER | TC_PROPERTIES
+    TypeCapability::NOTIFY_RECEIVER | TypeCapability::PROPERTIES
   }
 
-  fn property(&self, name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
+  fn property(&self, name: &str) -> Option<GraphRef<'ast, Variable<'ast>>> {
     self.properties.get(name).map(|p| p.asleep())
   }
 }

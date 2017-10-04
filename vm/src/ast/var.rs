@@ -45,10 +45,16 @@ impl<'a> SourceItem for Variable<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
+    if let Some(ref mut init) = self.initial {
+      init.resolve()?;
+    }
     Ok(())
   }
 
   fn typecheck(&mut self) -> Result<()> {
+    if let Some(ref mut init) = self.initial {
+      init.typecheck()?;
+    }
     Ok(())
   }
 }
@@ -69,8 +75,9 @@ impl<'a> DefaultValue<'a> {
     value: BoxExpression<'a>,
   ) -> Self
   {
-    let scope_range = scope.awake().kind().only();
-    let filtered_scope = ScopeFilter::new(scope, scope_range, true);
+    let mut scope_kind = scope.awake().kind();
+    scope_kind.remove(ScopeKind::RECURSIVE);
+    let filtered_scope = ScopeFilter::new(scope, scope_kind);
     DefaultValue {
       name: name.clone(),
       value,
@@ -88,66 +95,77 @@ impl<'a> SourceItem for DefaultValue<'a> {
   }
 
   fn resolve(&mut self) -> Result<()> {
-    self.var.resolve(Owner::find, &self.name)
+    self.var.resolve(Owner::find, &self.name)?;
+    self.value.resolve()
   }
 
   fn typecheck(&mut self) -> Result<()> {
-    Ok(())
+    self.value.typecheck()
   }
 }
 
-#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq)]
-pub struct ScopeKindRange(ScopeKind, ScopeKind);
-
-impl ScopeKindRange {
-  fn contains(&self, kind: ScopeKind) -> bool {
-    kind >= self.0 && kind <= self.1
-  }
-}
-
-impl Display for ScopeKindRange {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    if self.0 == self.1 {
-      write!(f, "({})", self.0)
-    } else {
-      write!(f, "({} : {})", self.0, self.1)
-    }
-  }
-}
-
-/// These are in order from least specific to most specific.
-/// Searches need to be able to specify their specificity
-/// when searching recursively through scopes.
-#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ScopeKind {
-  Global,
-  Type,
-  FnParam,
-  FnLocal,
-}
-
-impl ScopeKind {
-  pub fn all() -> ScopeKindRange {
-    ScopeKindRange(ScopeKind::Global, ScopeKind::FnLocal)
-  }
-
-  pub fn only(self) -> ScopeKindRange {
-    ScopeKindRange(self, self)
-  }
-
-  pub fn and_below(self) -> ScopeKindRange {
-    ScopeKindRange(ScopeKind::Global, self)
+bitflags! {
+  /// Flags for scope implementation and lookup. Some flags are only
+  /// valid for implementation - see `LOOKUP_MASK`.
+  pub struct ScopeKind: u16 {
+    /// The scope is the root.
+    const GLOBAL    = 0x1;
+    /// The scope is for a type container.
+    const TYPE      = 0x2;
+    /// The scope is for function parameters.
+    const FN_PARAM  = 0x4;
+    /// The scope is for function local variables.
+    const FN_LOCAL  = 0x8;
+    /// The scope includes parent scopes.
+    const RECURSIVE = 0x10;
+    /// The scope has a 'this' variable.
+    const INSTANCE  = 0x20;
+    /// The scope has a 'remote' variable.
+    const REMOTE    = 0x40;
+    /// The flags that are valid for lookups.
+    const LOOKUP_MASK = 0x1F;
   }
 }
 
 impl Display for ScopeKind {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    f.write_str(match *self {
-      ScopeKind::FnLocal => "function local",
-      ScopeKind::FnParam => "function param",
-      ScopeKind::Type => "type",
-      ScopeKind::Global => "global",
-    })
+    let mut flags = *self;
+    let mut first = true;
+    f.write_str("[")?;
+    {
+      let mut add = |kind: ScopeKind, rep: &str| -> fmt::Result {
+        if !flags.contains(kind) {
+          return Ok(());
+        }
+        flags.remove(kind);
+
+        if !first {
+          f.write_str(", ")?;
+        } else {
+          first = false;
+        }
+        f.write_str(rep)
+      };
+
+      add(ScopeKind::GLOBAL, "Global")?;
+      add(ScopeKind::TYPE, "Type")?;
+      add(ScopeKind::FN_PARAM, "FnParam")?;
+      add(ScopeKind::FN_LOCAL, "FnLocal")?;
+      add(ScopeKind::RECURSIVE, "Recursive")?;
+      add(ScopeKind::INSTANCE, "Instance")?;
+      add(ScopeKind::REMOTE, "Remote")?;
+    }
+    f.write_str("]")?;
+    debug_assert!(flags.is_empty(), "Not all cases covered");
+    Ok(())
+  }
+}
+
+impl Serialize for ScopeKind {
+  fn serialize<S: Serializer>(&self, serializer: S)
+    -> ::std::result::Result<S::Ok, S::Error>
+  {
+    serializer.serialize_str(&self.to_string())
   }
 }
 
@@ -160,18 +178,22 @@ pub struct Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
-  pub fn new(span: TokenSpan) -> GraphCell<Self> {
+  pub fn new(kind: ScopeKind, span: TokenSpan) -> GraphCell<Self> {
     GraphCell::new(Scope {
-      kind: ScopeKind::Global,
+      kind,
       vars: Default::default(),
       parent: None,
       span,
     })
   }
 
-  pub fn child(this: GraphRef<'a, Scope<'a>>, span: TokenSpan) -> GraphCell<Self> {
+  pub fn child(
+    this: GraphRef<'a, Scope<'a>>,
+    kind: ScopeKind, span: TokenSpan,
+  ) -> GraphCell<Self>
+  {
     GraphCell::new(Scope {
-      kind: ScopeKind::Type,
+      kind,
       vars: Default::default(),
       parent: Some(this),
       span,
@@ -209,37 +231,37 @@ impl<'a> Scope<'a> {
     self.vars.contains_key(name) || self.parent.map_or(false, |p| p.awake().has(name))
   }
 
-  pub fn has_filtered(&self, name: &str, range: ScopeKindRange, recursive: bool) -> bool {
-    if range.contains(self.kind) && self.vars.contains_key(name) {
+  pub fn has_filtered(&self, name: &str, kind: ScopeKind) -> bool {
+    if kind.contains(self.kind) && self.vars.contains_key(name) {
       true
-    } else if recursive {
-      self.parent.map_or(false, |p| p.awake().has_filtered(name, range, true))
+    } else if kind.contains(ScopeKind::RECURSIVE) {
+      self.parent.map_or(false, |p| p.awake().has_filtered(name, kind))
     } else {
       false
     }
   }
 
-  pub fn find_filtered_mut(&self, name: &str, range: ScopeKindRange, recursive: bool)
+  pub fn find_filtered_mut(&self, name: &str, kind: ScopeKind)
     -> Option<GraphRefMut<'a, Variable<'a>>>
   {
-    if range.contains(self.kind) {
+    if kind.contains(self.kind) {
       if let Some(v) = self.vars.get(name) {
         return Some(v.asleep_mut());
       }
     }
-    if recursive {
+    if kind.contains(ScopeKind::RECURSIVE) {
       self.parent
-        .map(|p| p.awake().find_filtered_mut(name, range, true))
+        .map(|p| p.awake().find_filtered_mut(name, kind))
         .unwrap_or(None)
     } else {
       None
     }
   }
 
-  pub fn find_filtered(&self, name: &str, range: ScopeKindRange, recursive: bool)
+  pub fn find_filtered(&self, name: &str, kind: ScopeKind)
     -> Option<GraphRef<'a, Variable<'a>>>
   {
-    self.find_filtered_mut(name, range, recursive).map(|v| v.asleep_ref())
+    self.find_filtered_mut(name, kind).map(|v| v.asleep_ref())
   }
 
   pub fn insert(&mut self, var: Variable<'a>) -> Result<GraphRefMut<'a, Variable<'a>>> {
@@ -323,33 +345,46 @@ pub trait Scoped<'a> {
 #[derive(Debug, Serialize)]
 pub struct ScopeFilter<'a> {
   scope: GraphRef<'a, Scope<'a>>,
-  range: ScopeKindRange,
-  recursive: bool,
+  kind: ScopeKind,
 }
 
 impl<'a> ScopeFilter<'a> {
   pub fn new(
     scope: GraphRef<'a, Scope<'a>>,
-    range: ScopeKindRange,
-    recursive: bool,
+    kind: ScopeKind,
   ) -> Self
   {
-    ScopeFilter { scope, range, recursive }
+    ScopeFilter { scope, kind }
   }
 
   pub fn to_inner(&self) -> GraphRef<'a, Scope<'a>> {
     self.scope
   }
+
+  pub fn kind(&self) -> ScopeKind {
+    self.kind
+  }
+
+  pub fn set_kind(&mut self, kind: ScopeKind) {
+    self.kind = kind;
+  }
+}
+
+impl<'a> From<GraphRef<'a, Scope<'a>>> for ScopeFilter<'a> {
+  fn from(scope: GraphRef<'a, Scope<'a>>) -> Self {
+    let kind = scope.awake().kind();
+    ScopeFilter::new(scope, kind)
+  }
 }
 
 impl<'a> Display for ScopeFilter<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "scope filter {}", self.range)
+    write!(f, "scope filter {}", self.kind)
   }
 }
 
 impl<'a> Owner<'a, Variable<'a>> for ScopeFilter<'a> {
   fn find_mut(&self, name: &str) -> Option<GraphRefMut<'a, Variable<'a>>> {
-    self.scope.awake().find_filtered_mut(name, self.range, self.recursive)
+    self.scope.awake().find_filtered_mut(name, self.kind)
   }
 }

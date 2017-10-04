@@ -1,0 +1,5 @@
+collectable Foo:
+  property bar integer;
+  property baz integer = .bar;
+  property fail integer = .baz.nope;
+end;

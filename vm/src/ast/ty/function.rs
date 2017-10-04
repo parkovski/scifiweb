@@ -1,37 +1,49 @@
 use std::sync::Arc;
 use util::graph_cell::*;
-use ast::var::Variable;
 use compile::{TokenSpan, TokenValue};
 use super::*;
 
 #[derive(Debug, Serialize)]
-pub struct Function<'a> {
+pub struct Function<'ast> {
   name: TokenValue<Arc<str>>,
-  params: Vec<GraphCell<Variable<'a>>>,
-  scope: GraphCell<Scope<'a>>,
+  param_scope: GraphCell<Scope<'ast>>,
+  local_scope: Later<GraphCell<Scope<'ast>>>,
 }
 
-impl<'a> Function<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> Function<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    Function {
-      name,
-      params: Vec::new(),
-      scope: Scope::child(parent_scope, span),
-    }
+    let f = Ast::insert_cast_type(
+      ast,
+      Function {
+        name,
+        param_scope: Scope::child(parent_scope, ScopeKind::FN_PARAM, span.clone()),
+        local_scope: Later::new(),
+      }
+    )?;
+    let mut fmut = f.awake_mut();
+    let param_scope = fmut.param_scope.asleep();
+    Later::set(
+      &mut fmut.local_scope,
+      Scope::child(param_scope, ScopeKind::FN_LOCAL, span)
+    );
+    Ok(f)
   }
 }
 
 type_macros!(
-  Function<'a>;
+  Function<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped(for local_scope: 'ast in)
 );
 
-impl<'a> SourceItem for Function<'a> {
+impl<'ast> SourceItem for Function<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -45,48 +57,52 @@ impl<'a> SourceItem for Function<'a> {
   }
 }
 
-impl<'a> CastType<'a> for Function<'a> {
+impl<'ast> CastType<'ast> for Function<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::Function;
 }
 
-impl<'a> CustomType<'a> for Function<'a> {
+impl<'ast> CustomType<'ast> for Function<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::Function
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_EXECUTE
+    TypeCapability::EXECUTE
   }
 }
 
 #[derive(Debug, Serialize)]
-pub struct RemoteFunction<'a> {
+pub struct RemoteFunction<'ast> {
   name: TokenValue<Arc<str>>,
-  params: Vec<GraphCell<Variable<'a>>>,
-  scope: GraphCell<Scope<'a>>,
+  param_scope: GraphCell<Scope<'ast>>,
 }
 
-impl<'a> RemoteFunction<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> RemoteFunction<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    RemoteFunction {
-      name,
-      params: Vec::new(),
-      scope: Scope::child(parent_scope, span),
-    }
+    Ast::insert_cast_type(
+      ast,
+      RemoteFunction {
+        name,
+        param_scope: Scope::child(parent_scope, ScopeKind::FN_PARAM, span),
+      }
+    )
   }
 }
 
 type_macros!(
-  RemoteFunction<'a>;
+  RemoteFunction<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped(for param_scope: 'ast in)
 );
 
-impl<'a> SourceItem for RemoteFunction<'a> {
+impl<'ast> SourceItem for RemoteFunction<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -100,11 +116,11 @@ impl<'a> SourceItem for RemoteFunction<'a> {
   }
 }
 
-impl<'a> CastType<'a> for RemoteFunction<'a> {
+impl<'ast> CastType<'ast> for RemoteFunction<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::RemoteFunction;
 }
 
-impl<'a> CustomType<'a> for RemoteFunction<'a> {
+impl<'ast> CustomType<'ast> for RemoteFunction<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::RemoteFunction
   }

@@ -1,41 +1,44 @@
 use std::sync::Arc;
 use util::graph_cell::*;
 use compile::{TokenSpan, TokenValue};
-use ast::var::*;
 use super::*;
 
 #[derive(Debug, Serialize)]
-pub struct Object<'a> {
+pub struct Object<'ast> {
   name: TokenValue<Arc<str>>,
   dynamic: bool,
-  scope: GraphCell<Scope<'a>>,
-  super_type: Option<GraphRef<'a, Object<'a>>>,
+  scope: GraphCell<Scope<'ast>>,
+  super_type: Option<GraphRef<'ast, Object<'ast>>>,
 }
 
-impl<'a> Object<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>)
-    -> Self
+impl<'ast> Object<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
   {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    Object {
-      name,
-      dynamic: false,
-      scope: Scope::child(parent_scope, span),
-      super_type: None,
-    }
+    Ast::insert_cast_type(
+      ast,
+      Object {
+        name,
+        dynamic: false,
+        scope: Scope::child(parent_scope, ScopeKind::TYPE | ScopeKind::RECURSIVE, span),
+        super_type: None,
+      }
+    )
   }
 }
 
 type_macros!(
-  Object<'a>;
+  Object<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for Object<'a> {
+impl<'ast> SourceItem for Object<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -49,34 +52,34 @@ impl<'a> SourceItem for Object<'a> {
   }
 }
 
-impl<'a> CastType<'a> for Object<'a> {
+impl<'ast> CastType<'ast> for Object<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::Object;
 }
 
-impl<'a> CustomType<'a> for Object<'a> {
+impl<'ast> CustomType<'ast> for Object<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::Object
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_PROPERTIES | TC_OWNED | TC_INHERIT
+    TypeCapability::PROPERTIES | TypeCapability::OWNED | TypeCapability::INHERIT
   }
 
-  fn property(&self, _name: &str) -> Option<GraphRef<'a, Variable<'a>>> {
+  fn property(&self, _name: &str) -> Option<GraphRef<'ast, Variable<'ast>>> {
     None
   }
 
-  fn is_sub_type_of(&self, _ty: &CustomType<'a>) -> bool {
+  fn is_sub_type_of(&self, _ty: &CustomType<'ast>) -> bool {
     false
   }
 }
 
-impl<'a> SubType<'a, Object<'a>> for Object<'a> {
-  fn super_type(&self) -> Option<GraphRef<'a, Object<'a>>> {
+impl<'ast> SubType<'ast, Object<'ast>> for Object<'ast> {
+  fn super_type(&self) -> Option<GraphRef<'ast, Object<'ast>>> {
     self.super_type
   }
 
-  fn assign_super_type_internal(&mut self, super_type: GraphRef<'a, Object<'a>>) {
+  fn assign_super_type_internal(&mut self, super_type: GraphRef<'ast, Object<'ast>>) {
     self.super_type = Some(super_type);
   }
 }

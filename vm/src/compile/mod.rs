@@ -7,7 +7,7 @@ pub use self::token::{TokenSpan, TokenValue};
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::path::Path;
 use ast::Ast;
-use util::graph_cell::GraphCell;
+use util::graph_cell::{GraphCell, GraphRefMut};
 
 /// In the lexer, tokens are not created until
 /// after the errors are.
@@ -133,6 +133,15 @@ pub use self::parse_errors::{
   ResultExt as ParseResultExt,
 };
 
-pub fn compile_graph<'a>(filename: &Path) -> ParseResult<Box<GraphCell<Ast<'a>>>> {
-  Ok(parser_rd::Parser::parse(filename)?)
+pub fn compile_file<'a>(filename: &Path) -> ParseResult<Box<GraphCell<Ast<'a>>>> {
+  parser_rd::Parser::parse(filename)
+}
+
+pub fn compile_string<'a>(
+  filename: &Path,
+  program: &str,
+  ast: GraphRefMut<'a, Ast<'a>>
+) -> ParseResult<()>
+{
+  parser_rd::Parser::parse_str(filename, program, ast)
 }

@@ -5,33 +5,39 @@ use compile::{TokenSpan, TokenValue};
 use super::*;
 
 #[derive(Debug, Serialize)]
-pub struct Event<'a> {
+pub struct Event<'ast> {
   name: TokenValue<Arc<str>>,
-  params: Vec<GraphCell<Variable<'a>>>,
-  scope: GraphCell<Scope<'a>>,
+  params: Vec<GraphCell<Variable<'ast>>>,
+  scope: GraphCell<Scope<'ast>>,
 }
 
-impl<'a> Event<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> Event<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    Event {
-      name,
-      params: Vec::new(),
-      scope: Scope::child(parent_scope, span),
-    }
+    Ast::insert_cast_type(
+      ast,
+      Event {
+        name,
+        params: Vec::new(),
+        scope: Scope::child(parent_scope, ScopeKind::TYPE, span),
+      }
+    )
   }
 }
 
 type_macros!(
-  Event<'a>;
+  Event<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for Event<'a> {
+impl<'ast> SourceItem for Event<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -45,48 +51,54 @@ impl<'a> SourceItem for Event<'a> {
   }
 }
 
-impl<'a> CastType<'a> for Event<'a> {
+impl<'ast> CastType<'ast> for Event<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::Event;
 }
 
-impl<'a> CustomType<'a> for Event<'a> {
+impl<'ast> CustomType<'ast> for Event<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::Event
   }
 
   fn capabilities(&self) -> TypeCapability {
-    TC_EXECUTE | TC_NOTIFY_RECEIVER | TC_NOTIFY_ENDPOINT
+    TypeCapability::EXECUTE | TypeCapability::NOTIFY_RECEIVER | TypeCapability::NOTIFY_ENDPOINT
   }
 }
 
 #[derive(Debug, Serialize)]
-pub struct RemoteEvent<'a> {
+pub struct RemoteEvent<'ast> {
   name: TokenValue<Arc<str>>,
-  params: Vec<GraphCell<Variable<'a>>>,
-  scope: GraphCell<Scope<'a>>,
+  params: Vec<GraphCell<Variable<'ast>>>,
+  scope: GraphCell<Scope<'ast>>,
 }
 
-impl<'a> RemoteEvent<'a> {
-  pub fn new(name: TokenValue<Arc<str>>, parent_scope: GraphRef<'a, Scope<'a>>) -> Self {
+impl<'ast> RemoteEvent<'ast> {
+  pub fn new(name: TokenValue<Arc<str>>, ast: GraphRefMut<'ast, Ast<'ast>>)
+    -> Result<GraphRefMut<'ast, Self>>
+  {
+    let parent_scope = ast.awake().scope();
     let span = name.span().clone();
-    RemoteEvent {
-      name,
-      params: Vec::new(),
-      scope: Scope::child(parent_scope, span),
-    }
+    Ast::insert_cast_type(
+      ast,
+      RemoteEvent {
+        name,
+        params: Vec::new(),
+        scope: Scope::child(parent_scope, ScopeKind::TYPE, span),
+      }
+    )
   }
 }
 
 type_macros!(
-  RemoteEvent<'a>;
+  RemoteEvent<'ast>;
 
   impl_named(type),
   impl_name_traits,
   named_display,
-  impl_scoped('a,)
+  impl_scoped('ast,)
 );
 
-impl<'a> SourceItem for RemoteEvent<'a> {
+impl<'ast> SourceItem for RemoteEvent<'ast> {
   fn span(&self) -> &TokenSpan {
     self.name.span()
   }
@@ -100,11 +112,11 @@ impl<'a> SourceItem for RemoteEvent<'a> {
   }
 }
 
-impl<'a> CastType<'a> for RemoteEvent<'a> {
+impl<'ast> CastType<'ast> for RemoteEvent<'ast> {
   const BASE_TYPE: BaseCustomType = BaseCustomType::RemoteEvent;
 }
 
-impl<'a> CustomType<'a> for RemoteEvent<'a> {
+impl<'ast> CustomType<'ast> for RemoteEvent<'ast> {
   fn base_type(&self) -> BaseCustomType {
     BaseCustomType::RemoteEvent
   }

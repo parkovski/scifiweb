@@ -32,6 +32,7 @@ Usage:
   scifiweb [options]
   scifiweb init <dir>
   scifiweb build [-t <target>] [options]
+  scifiweb run <file> [options]
   scifiweb console [-u <user> (-k <key-file> | -p [<password>])]
   scifiweb --help
 
@@ -47,6 +48,7 @@ Command overview:
   (none)      Start a server for the program listed in the configuration file.
   init        Create an initial configuration and source file in <dir>.
   build       Build the specified target.
+  run         Run a self-contained program.
   console     Start the interactive console.
 ";
 
@@ -67,8 +69,10 @@ impl Default for Target {
 struct Args {
   cmd_init: bool,
   cmd_build: bool,
+  cmd_run: bool,
   cmd_console: bool,
   arg_dir: String,
+  arg_file: String,
   flag_config: Option<String>,
   flag_c: Vec<String>,
   flag_target: Option<Target>,
@@ -130,19 +134,26 @@ fn main() {
 
   if args.cmd_build {
     trace!("Starting build for {}, target {:?}", &config.program, args.flag_target);
-    match vm::compile_graph(Path::new(&config.program)) {
-      Ok(ast) => {
-        info!("Loaded program.");
-        if args.flag_z.save_ast {
-          write_ast(&ast.awake());
-        }
-      }
-      Err(e) => error!("{}", e),
-    }
+    build(&config.program, args.flag_z.save_ast);
+  } else if args.cmd_run {
+    trace!("Running {}", args.arg_file);
+    build(&args.arg_file, args.flag_z.save_ast);
   } else {
     model::initialize();
     let accessor = MemoryAccessor::new();
     http_server::start(config.server.http_addr.as_str(), accessor)
       .unwrap_or_else(|e| error!("HTTP Error: {}", e));
+  }
+}
+
+fn build(filename: &str, save_ast: bool) {
+  match vm::compile_file(Path::new(filename)) {
+    Ok(ast) => {
+      info!("Loaded program.");
+      if save_ast {
+        write_ast(&ast.awake());
+      }
+    }
+    Err(e) => error!("{}", e),
   }
 }
