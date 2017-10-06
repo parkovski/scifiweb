@@ -28,7 +28,7 @@ scifi-model-postgres = {path = "model-postgres", optional = true}
 scifi-model-redis = {path = "model-redis", optional = true}
 scifi-http-server = {path = "http-server"}
 #sf-ws-server = {path = "ws-server"}
-scifi-util = {path = "util"}
+scifi-util = {path = "util", features = ["custom-backtrace"]}
 scifi-vm = {path = "vm"}
 
 [features]

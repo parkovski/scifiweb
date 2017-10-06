@@ -10,6 +10,12 @@ extern crate termcolor;
 extern crate fxhash;
 extern crate chrono;
 extern crate serde;
+#[cfg(all(windows, feature = "custom-backtrace"))]
+extern crate winapi;
+#[cfg(all(windows, feature = "custom-backtrace"))]
+extern crate kernel32;
+#[cfg(all(windows, feature = "custom-backtrace"))] #[macro_use]
+extern crate lazy_static;
 
 pub mod cast;
 pub mod future;
@@ -18,6 +24,8 @@ pub mod later;
 pub mod logger;
 pub mod split_vec;
 pub mod sync;
+#[cfg(all(windows, feature = "custom-backtrace"))]
+pub mod win_bt;
 
 use std::sync::Arc;
 use std::cell::RefCell;

@@ -25,6 +25,10 @@ use vm::ast::Ast;
 use self::config::{Config, DEFAULT_CONFIG_PATH};
 use self::options::DebugOptions;
 
+/*extern "C" {
+  static __BaseImage: i8;
+}*/
+
 const USAGE: &'static str = "
 SciFiWeb Game Management Server
 
@@ -108,6 +112,9 @@ fn write_ast<'a>(ast: &Ast<'a>) {
 }
 
 fn main() {
+  #[cfg(windows)]
+  util::win_bt::set_panic_hook();
+
   let args: Args = Docopt::new(USAGE)
     .and_then(|d| d.deserialize())
     .unwrap_or_else(|e| e.exit());

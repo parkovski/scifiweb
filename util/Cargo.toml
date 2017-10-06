@@ -11,3 +11,10 @@ termcolor = "0.3.2"
 fxhash = "0.2.1"
 chrono = "0.4"
 serde = "*"
+winapi = { version = "0.2", optional = true }
+kernel32-sys = { version = "0.2.2", optional = true }
+lazy_static = { version = "0.2.8", optional = true }
+
+[features]
+default = []
+custom-backtrace = ["winapi", "kernel32-sys", "lazy_static"]
